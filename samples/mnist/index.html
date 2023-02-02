@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPU computing with Python on web browser sample</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>MNIST training on web browser</h1>
+    <div>
+      Device:
+      <label><input type="radio" name="device" value="cpu" />CPU</label>
+      <label
+        ><input type="radio" name="device" value="webgl" checked />GPU (WebGL)</label
+      >
+    </div>
+    <div>
+      Model:
+      <label><input type="radio" name="model" value="MLP" />MLP</label>
+      <label><input type="radio" name="model" value="CNN" checked />CNN</label>
+    </div>
+    <div>
+      Batch size:
+      <input type="number" name="batchSize" value="32"/>
+    </div>
+    <button type="button" id="run">Run</button>
+    <div id="log"></div>
+  </body>
+</html>

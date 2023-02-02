@@ -1,0 +1,41 @@
+{
+  "name": "wgpy",
+  "version": "1.0.0",
+  "description": "WebGL accelerated numpy-compatible array library for web browser",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "build": "npm run build:js && npm run build:python && npm run build:test",
+    "build:js": "webpack",
+    "build:js:watch": "webpack --watch",
+    "build:python:webgl": "rimraf build && python setup_webgl.py bdist_wheel",
+    "build:python:webgpu": "rimraf build && python setup_webgpu.py bdist_wheel",
+    "build:python": "npm run build:python:webgl && npm run build:python:webgpu",
+    "build:test": "rimraf build && python setup_test.py bdist_wheel"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edgeintelligence/wgpy.git"
+  },
+  "keywords": [],
+  "author": "Masatoshi Hidaka",
+  "license": "MIT",
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.50.0",
+    "@typescript-eslint/parser": "^5.50.0",
+    "@webgpu/types": "^0.1.26",
+    "eslint": "^8.33.0",
+    "eslint-config-prettier": "^8.6.0",
+    "express": "^4.18.2",
+    "prettier": "^2.8.3",
+    "ts-loader": "^9.4.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.5",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1"
+  },
+  "devDependencies": {
+    "rimraf": "^4.3.1"
+  }
+}
