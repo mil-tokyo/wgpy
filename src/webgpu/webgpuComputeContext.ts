@@ -1,7 +1,6 @@
 import { nonNull } from '../util';
 import { getNNWebGPUContext, initializeNNWebGPUContext } from './webgpuContext';
 import {
-  TypedArrayTypesForWebGPUBuffer,
   WebGPUTensorBuffer,
 } from './webgpuTensorBuffer';
 
@@ -29,13 +28,13 @@ export interface ComputeContextGPUMessageDisposeBuffer {
 export interface ComputeContextGPUMessageSetData {
   method: 'gpu.setData';
   id: number;
-  data: Float32Array;
+  data: Uint8Array;
 }
 
 export interface ComputeContextGPUMessageGetData {
   method: 'gpu.getData';
   id: number;
-  data: Float32Array; // TypedArray of SharedArrayBuffer
+  data: Uint8Array; // TypedArray of SharedArrayBuffer
   notify: Int32Array; // Int32Array(1) of SharedArrayBuffer
 }
 
@@ -86,7 +85,7 @@ export class ComputeContextGPU {
     }
   }
 
-  setData(id: number, data: TypedArrayTypesForWebGPUBuffer): void {
+  setData(id: number, data: Uint8Array): void {
     const tb = this.tensorBuffers.get(id);
     if (!tb) {
       return;
@@ -94,12 +93,12 @@ export class ComputeContextGPU {
     tb.setDataRaw(data);
   }
 
-  getData(id: number): Promise<Float32Array> {
+  getData(id: number): Promise<Uint8Array> {
     const tb = this.tensorBuffers.get(id);
     if (!tb) {
       return Promise.reject();
     }
-    return tb.getDataRaw('float32') as Promise<Float32Array>;
+    return tb.getDataRaw() as Promise<Uint8Array>;
   }
 
   addKernel(
@@ -124,6 +123,7 @@ export class ComputeContextGPU {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleMessage(message: ComputeContextGPUMessage, worker: Worker) {
+    console.log('handleMessage GPU', message);
     switch (message.method) {
       case 'gpu.addKernel':
         this.addKernel(message.name, message.descriptor);

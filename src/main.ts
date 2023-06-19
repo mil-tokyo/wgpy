@@ -43,16 +43,24 @@ export async function initMain(worker: Worker, options: WgpyInitOptions) {
         gpu: contextGPU ? {} : null,
       });
     } else if (e.data.method.startsWith('gl.')) {
-      try {
-        contextGL?.handleMessage(e.data, worker);
-      } catch (error) {
-        console.error(error);
+      if (contextGL) {
+        try {
+          contextGL.handleMessage(e.data, worker);
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        console.error('WebGL context is not initialized. Call initMain with options={gl: true}.');
       }
     } else if (e.data.method.startsWith('gpu.')) {
-      try {
-        contextGPU?.handleMessage(e.data, worker);
-      } catch (error) {
-        console.error(error);
+      if (contextGPU) {
+        try {
+          contextGPU.handleMessage(e.data, worker);
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        console.error('WebGPU context is not initialized. Call initMain with options={gpu: true}.');
       }
     }
   });

@@ -133,6 +133,12 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
 }
 
 function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
+  let sharedBufferSent = false;
+  let notifyBuffer: SharedArrayBuffer | undefined = undefined;
+  let notifyBufferView: Int32Array | undefined = undefined;
+  let placeholderBuffer: SharedArrayBuffer | undefined = undefined;
+  let commBuf: any = undefined;
+  let commBufUint8Array: Uint8Array | undefined = undefined;
   (globalThis as any).gpu = {
     isAvailable: () => {
       return gpuAvailable;
@@ -157,40 +163,68 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
     disposeBuffer: (id: number) => {
       postToMain({ method: 'gpu.disposeBuffer', id });
     },
-    setData: (id: number, data: any) => {
-      const buffer = data.getBuffer();
-      data.destroy();
-      try {
-        const len = buffer.nbytes / buffer.itemsize;
-        const transferData = new Float32Array(len);
-        transferData.set(buffer.data);
-        postToMain({ method: 'gpu.setData', id, data: transferData }, [
-          transferData.buffer,
-        ]);
-      } finally {
-        buffer.release();
+    setCommBuf: (data: any) => {
+      if (commBuf) {
+        commBuf.release();
       }
-    },
-    getData: (id: number, data: any) => {
-      const buffer = data.getBuffer();
+      commBuf = data.getBuffer();
+      // data.destroy() takes relatively long time, so use the same buffer for every setData / getData.
       data.destroy();
-      try {
-        const notifyBuffer = new SharedArrayBuffer(4);
-        const notifyBufferView = new Int32Array(notifyBuffer);
+      commBufUint8Array = commBuf.data;
+    },
+    setData: (id: number, byteLength: number) => {
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      const transferData = new Uint8Array(byteLength);
+      transferData.set(dataSrc);
+      postToMain({ method: 'gpu.setData', id, data: transferData }, [
+        transferData.buffer,
+      ]);
+    },
+    getData: (id: number, byteLength: number) => {
+      if (!notifyBuffer) {
+        notifyBuffer = new SharedArrayBuffer(4);
+        notifyBufferView = new Int32Array(notifyBuffer);
         notifyBufferView[0] = 0;
-        const placeholderBuffer = new SharedArrayBuffer(buffer.nbytes);
-        const placeholderData = new Float32Array(placeholderBuffer);
+      }
+      if (!placeholderBuffer) {
+        placeholderBuffer = new SharedArrayBuffer(16 * 1024 * 1024 * 4);
+      }
+
+      if (byteLength > placeholderBuffer.byteLength) {
+        throw new Error(
+          `buffer size insufficient: ${
+            byteLength
+          } bytes required`
+        );
+      }
+      notifyBufferView![0] = 0;
+      if (sharedBufferSent) {
+        postToMain({ method: 'gpu.getData', id });
+      } else {
         postToMain({
           method: 'gpu.getData',
           id,
-          data: placeholderData,
-          notify: notifyBufferView,
+          data: placeholderBuffer,
+          notify: notifyBuffer,
         });
-        Atomics.wait(notifyBufferView, 0, 0);
-        buffer.data.set(placeholderData);
-      } finally {
-        buffer.release();
+        sharedBufferSent = true;
       }
+      console.log('get wait');
+      // if buffer[0] = 1 is written before Atomics.wait, it does not wait.
+      Atomics.wait(notifyBufferView!, 0, 0);
+      console.log('get complete');
+
+      const placeholderData = new Uint8Array(placeholderBuffer, 0, byteLength);
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      dataSrc.set(placeholderData);
     },
     addKernel: (
       name: string,

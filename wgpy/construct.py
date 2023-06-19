@@ -35,7 +35,7 @@ def asarray(x) -> ndarray:
     if np.isscalar(x):
         x = np.array(x)
     assert isinstance(x, np.ndarray)
-    ary = ndarray(x.shape, x.dtype)
+    ary = ndarray(x.shape, x.dtype, for_write_from_cpu=True, for_read_to_cpu=False)
     ary.set(x)
     return ary
 

@@ -1,10 +1,11 @@
 from typing import Optional, Tuple, Union
 import numpy as np
+from wgpy_backends.webgpu.texture import WebGPUArrayTextureShape
 from wgpy.common.ndarray_base import NDArrayBase, A
-from wgpy_backends.webgl.device import Device
+from wgpy_backends.webgpu.device import Device
 from wgpy.common.indexing import calc_strides
 from wgpy.common.shape_util import args_to_tuple_of_int, calculate_c_contiguous_strides
-from wgpy_backends.webgl.webgl_buffer import WebGLBuffer
+from wgpy_backends.webgpu.webgpu_buffer import WebGPUBuffer
 
 pass_types = set(np.dtype(t) for t in [np.bool_, np.uint8, np.int32, np.float32])
 type_maps = {
@@ -12,15 +13,15 @@ type_maps = {
     np.dtype(np.int64): np.dtype(np.int32),
 }
 
-def map_dtype_to_webgl(dtype: np.dtype) -> np.dtype:
+def map_dtype_to_webgpu(dtype: np.dtype) -> np.dtype:
     if dtype in pass_types:
         return dtype
     new_dtype = type_maps.get(dtype)
     if new_dtype is None:
-        raise NotImplementedError(f"dtype={dtype} is not implemented in webgl.")
+        raise NotImplementedError(f"dtype={dtype} is not implemented in webgpu.")
     return new_dtype
 
-class WebGLArrayFlags:
+class WebGPUArrayFlags:
     owndata: bool
     c_contiguous: bool
     c_contiguous_full: bool # c-contiguous and offset==0 and size==buffer.size
@@ -45,15 +46,15 @@ class WebGLArrayFlags:
 
 class ndarray(NDArrayBase):
     base: Optional['ndarray']
-    buffer: WebGLBuffer
-    flags: WebGLArrayFlags
+    buffer: WebGPUBuffer
+    flags: WebGPUArrayFlags
 
-    def __init__(self, shape: Tuple[int, ...], dtype: np.dtype, strides: Optional[Tuple[int, ...]]=None, offset: int=0, base: Optional['ndarray']=None, buffer: Optional[WebGLBuffer]=None, owndata: Optional[bool]=None) -> None:
+    def __init__(self, shape: Tuple[int, ...], dtype: np.dtype, strides: Optional[Tuple[int, ...]]=None, offset: int=0, base: Optional['ndarray']=None, buffer: Optional[WebGPUBuffer]=None, owndata: Optional[bool]=None) -> None:
         super().__init__()
         assert isinstance(shape, tuple)
         self.shape = shape
         # TODO: Leave dtype as the requested type and provide a separate attribute for the physical type
-        self.dtype = map_dtype_to_webgl(np.dtype(dtype))
+        self.dtype = map_dtype_to_webgpu(np.dtype(dtype))
         self.ndim = len(shape)
         size = 1
         for i in range(self.ndim):
@@ -74,13 +75,14 @@ class ndarray(NDArrayBase):
             # when owndata flag is not given, assume self owns the buffer if buffer is newly created
             owndata = buffer is None
         if buffer is None:
-            buffer = WebGLBuffer(self.size, self.dtype)
+            buffer = WebGPUBuffer(self.size, self.dtype)
         self.buffer = buffer
         # TODO avoid circular referencing
-        from wgpy_backends.webgl.webgl_array_func import WebGLArrayFunc
-        self.array_func = WebGLArrayFunc.instance()
+        # TODO implement
+        # from wgpy_backends.webgpu.webgpu_array_func import WebGPUArrayFunc
+        # self.array_func = WebGPUArrayFunc.instance()
         c_contiguous = self._check_c_contiguous()
-        self.flags = WebGLArrayFlags(
+        self.flags = WebGPUArrayFlags(
             owndata=owndata,
             c_contiguous=c_contiguous,
             c_contiguous_full=c_contiguous and self.offset == 0 and self.size == self.buffer.size,
@@ -89,19 +91,20 @@ class ndarray(NDArrayBase):
 
     _astype_kernel = None
     def astype(self, dtype, *args, copy=True, **kwargs):
-        if copy is False and dtype == self.dtype:
-            return self
-        if ndarray._astype_kernel is None:
-            from wgpy_backends.webgl.elementwise_kernel import ElementwiseKernel
-            ndarray._astype_kernel = ElementwiseKernel(
-                in_params="T in0",
-                out_params="V out0",
-                operation="out0 = V(in0)",
-                name="astype"
-            )
-        from wgpy.construct import empty
-        out = empty(self.shape, dtype=dtype)
-        return ndarray._astype_kernel(self, out)
+        raise NotImplementedError
+        # if copy is False and dtype == self.dtype:
+        #     return self
+        # if ndarray._astype_kernel is None:
+        #     from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
+        #     ndarray._astype_kernel = ElementwiseKernel(
+        #         in_params="T in0",
+        #         out_params="V out0",
+        #         operation="out0 = V(in0)",
+        #         name="astype"
+        #     )
+        # from wgpy.construct import empty
+        # out = empty(self.shape, dtype=dtype)
+        # return ndarray._astype_kernel(self, out)
     
     def copy(self):
         return +self # __pos__
