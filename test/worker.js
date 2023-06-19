@@ -15,11 +15,11 @@ async function loadPythonCode() {
   return f.text();
 }
 
-async function start(testPath) {
+async function start(backend, testPath) {
   log('Initializing wgpy worker-side javascript interface');
   await wgpy.initWorker();
 
-  log('Loading pyodide');
+  log(`Loading pyodide with wgpy (backend: ${backend})`);
   pyodide = await loadPyodide({
     indexURL: '/lib/pyodide/',
     stdout: log,
@@ -28,7 +28,7 @@ async function start(testPath) {
   await pyodide.loadPackage('micropip');
   await pyodide.loadPackage('numpy');
   await pyodide.loadPackage('pytest');
-  await pyodide.loadPackage('/dist/wgpy_webgl-1.0.0-py3-none-any.whl');
+  await pyodide.loadPackage(`/dist/wgpy_${backend}-1.0.0-py3-none-any.whl`);
   await pyodide.loadPackage('/dist/wgpy_test-1.0.0-py3-none-any.whl');
   // loadPackage of custom wheel does not install dependencies. In contrast, micropip.install does so.
   // await pyodide.loadPackage('/lib/chainer-5.4.0-py3-none-any.whl');
@@ -51,7 +51,7 @@ addEventListener('message', (ev) => {
 
   switch (ev.data.method) {
     case 'start':
-      start(ev.data.testPath).catch((reason) => log(`Worker error: ${reason}`));
+      start(ev.data.backend, ev.data.testPath).catch((reason) => log(`Worker error: ${reason}`));
       break;
   }
 });

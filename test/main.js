@@ -6,6 +6,8 @@ function log(message) {
 }
 
 async function run() {
+  const backend = document.querySelector('input[name="backend"]:checked').value;
+  console.log(`backend: ${backend}`);
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
@@ -27,10 +29,16 @@ async function run() {
   // example: http://locahost:8000/?test_path=/test_chainer.py
   const testPath = (new URLSearchParams(location.search)).get('test_path') || '';
   // after wgpy.initMain completed, wgpy.initWorker can be called in worker thread
-  worker.postMessage({ namespace: 'app', method: 'start', testPath });
+  worker.postMessage({ namespace: 'app', method: 'start', backend, testPath });
 }
 
 window.addEventListener('load', () => {
+  const defaultBackend = (new URLSearchParams(location.search)).get('backend') || 'webgl';
+  const radioButton = document.querySelector(`input[name="backend"][value="${defaultBackend}"]`);
+  if (radioButton) {
+    radioButton.checked = true;
+  }
+
   document.getElementById('run').onclick = () => {
     run().catch((error) => {
       log(`Main thread error: ${error.message}`);

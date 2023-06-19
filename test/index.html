@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -8,15 +9,29 @@
     <script src="main.js"></script>
     <script src="../dist/wgpy-main.js"></script>
     <style>
-#log pre {
-    white-space: pre-wrap;
-    margin: 0;
-}
+        #log pre {
+            white-space: pre-wrap;
+            margin: 0;
+        }
     </style>
 </head>
+
 <body>
     <h1>wgpy test</h1>
+    <fieldset>
+        <legend>Backend</legend>
+        <input type="radio" id="webgl" name="backend" value="webgl" checked>
+        <label for="webgl">WebGL</label>
+        <br>
+        <input type="radio" id="webgpu" name="backend" value="webgpu">
+        <label for="webgpu">WebGPU</label>
+    </fieldset>
     <button type="button" id="run">TEST</button>
+    <p>Hint: if you run only one test file, specify it in the URL such as <a
+            href="http://localhost:8000/test/?test_path=/test_dot.py">http://localhost:8000/test/?test_path=/test_dot.py</a>.
+        To change default backend, use <a
+            href="http://localhost:8000/test/?backend=webgpu">http://localhost:8000/test/?backend=webgpu</a></p>
     <div id="log"></div>
 </body>
+
 </html>
