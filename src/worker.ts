@@ -149,15 +149,11 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
     createBuffer: (
       id: number,
       byteLength: number,
-      forWriteFromCPU: boolean,
-      forReadToCPU: boolean
     ) => {
       postToMain({
         method: 'gpu.createBuffer',
         id,
         byteLength,
-        forWriteFromCPU,
-        forReadToCPU,
       });
     },
     disposeBuffer: (id: number) => {
@@ -213,10 +209,9 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
         });
         sharedBufferSent = true;
       }
-      console.log('get wait');
+
       // if buffer[0] = 1 is written before Atomics.wait, it does not wait.
       Atomics.wait(notifyBufferView!, 0, 0);
-      console.log('get complete');
 
       const placeholderData = new Uint8Array(placeholderBuffer, 0, byteLength);
       const dataSrc = new Uint8Array(

@@ -16,8 +16,6 @@ export interface ComputeContextGPUMessageCreateBuffer {
   method: 'gpu.createBuffer';
   id: number;
   byteLength: number;
-  forWriteFromCPU: boolean;
-  forReadToCPU: boolean;
 }
 
 export interface ComputeContextGPUMessageDisposeBuffer {
@@ -34,8 +32,8 @@ export interface ComputeContextGPUMessageSetData {
 export interface ComputeContextGPUMessageGetData {
   method: 'gpu.getData';
   id: number;
-  data: Uint8Array; // TypedArray of SharedArrayBuffer
-  notify: Int32Array; // Int32Array(1) of SharedArrayBuffer
+  data: SharedArrayBuffer; // TypedArray of SharedArrayBuffer
+  notify: SharedArrayBuffer; // Int32Array(1) of SharedArrayBuffer
 }
 
 export interface ComputeContextGPUMessageAddKernel {
@@ -66,13 +64,9 @@ export class ComputeContextGPU {
   createBuffer(
     id: number,
     byteLength: number,
-    forWriteFromCPU: boolean,
-    forReadToCPU: boolean
   ) {
     const tensorBuffer = new WebGPUTensorBuffer({
       byteLength,
-      forWriteFromCPU,
-      forReadToCPU,
     });
     this.tensorBuffers.set(id, tensorBuffer);
   }
@@ -121,9 +115,10 @@ export class ComputeContextGPU {
     });
   }
 
+  mdata: SharedArrayBuffer | null = null;
+  mnotify: Int32Array | null = null;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleMessage(message: ComputeContextGPUMessage, worker: Worker) {
-    console.log('handleMessage GPU', message);
     switch (message.method) {
       case 'gpu.addKernel':
         this.addKernel(message.name, message.descriptor);
@@ -132,18 +127,23 @@ export class ComputeContextGPU {
         this.createBuffer(
           message.id,
           message.byteLength,
-          message.forWriteFromCPU,
-          message.forReadToCPU
         );
         break;
       case 'gpu.disposeBuffer':
         this.disposeBuffer(message.id);
         break;
       case 'gpu.getData':
+        if (message.data) {
+          this.mdata = message.data;
+        }
+        if (message.notify) {
+          this.mnotify = new Int32Array(message.notify);
+        }
         this.getData(message.id)
           .then((data) => {
-            message.data.set(data);
-            Atomics.notify(message.notify, 0);
+            (new Uint8Array(this.mdata!)).set(data);
+            this.mnotify![0] = 1;
+            Atomics.notify(this.mnotify!, 0);
           })
           .catch((reason) => {
             console.error(reason);

@@ -29,28 +29,27 @@ export class WebGPUTensorBuffer {
   }
 
   setDataRaw(data: Uint8Array): void {
-    // 新しいバッファに書いて、copyBufferToBufferで明示的にコピーする仕様に変える
-    if (!this.mappedForWriteFromCPU) {
-      // TODO: enable write again by creating temporary buffer and copybuffertobuffer
-      throw new Error(
-        'The buffer is not mapped. WebGPUTensor can only be written just after creation.'
-      );
-    }
+    const ctx = getNNWebGPUContext();
+    const copySrcBuffer = ctx.device.createBuffer({
+      mappedAtCreation: true, // by using this option, async is not needed
+      size: this.gpuBuffer.size,
+      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE,
+    });
 
-    const ab = this.gpuBuffer.getMappedRange();
-    // create same typedarray as data
+    const ab = copySrcBuffer.getMappedRange();
     const mappedArray = new Uint8Array(ab);
     mappedArray.set(data);
-    this.gpuBuffer.unmap();
-    this.mappedForWriteFromCPU = false;
+    copySrcBuffer.unmap();
+
+    const commandEncoder = ctx.device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(copySrcBuffer, 0, this.gpuBuffer, 0, this.gpuBuffer.size);
+
+    ctx.device.queue.submit([commandEncoder.finish()]);
+
+    copySrcBuffer.destroy();
   }
 
   async getDataRaw(): Promise<Uint8Array> {
-    if (!this.bufferShape.forReadToCPU) {
-      throw new Error(
-        'forReadToCPU flag is not set for this WebGPUTensor. Please use WebGPUTensor.copy() to create readable tensor.'
-      );
-    }
     const ctx = getNNWebGPUContext();
 
     const data = new Uint8Array(this.bufferShape.byteLength),

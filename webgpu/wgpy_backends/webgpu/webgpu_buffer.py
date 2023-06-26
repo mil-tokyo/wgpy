@@ -62,7 +62,7 @@ class WebGPUBuffer:
         else:
             self.buffer_id = WebGPUBuffer.next_id
             WebGPUBuffer.next_id += 1
-            get_platform().createBuffer(self.buffer_id, self.texture_shape.byte_length, self.texture_shape.for_write_from_cpu, self.texture_shape.for_read_to_cpu)
+            get_platform().createBuffer(self.buffer_id, self.texture_shape.byte_length)
             performance_metrics['webgpu.buffer.create'] += 1
             performance_metrics['webgpu.buffer.buffer_count'] += 1
             performance_metrics['webgpu.buffer.buffer_size'] += self.texture_shape.byte_length
@@ -83,7 +83,6 @@ class WebGPUBuffer:
     def set_data(self, array: np.ndarray):
         if self.size == 0:
             return
-        # TODO テンポラリバッファを作成してそこに書き込み、そこから本来のバッファにコピーする
         # cast array of type float to float32, int or bool to int32
         dtype = {np.dtype(np.bool_): np.dtype(np.int32), np.dtype(np.uint8): np.dtype(np.int32), np.dtype(np.int32): np.dtype(np.int32), np.dtype(np.float32): np.dtype(np.float32)}[self.dtype]
         buf = self._get_comm_buf(self.texture_shape.byte_length)
@@ -99,7 +98,6 @@ class WebGPUBuffer:
 
     def get_data(self) -> np.ndarray:
         # TODO Sorting out dtype, whether it is a WebGPU internal representation or ndarray dtype.
-        # TODO テンポラリバッファを作成してコピーし、そこから読み取る
         return self._get_data_internal(self.dtype)
         
     def _get_data_internal(self, original_dtype: np.dtype):

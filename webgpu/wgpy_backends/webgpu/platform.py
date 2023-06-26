@@ -6,8 +6,8 @@ class WebGPUPlatform:
     def getDeviceInfo(self) -> dict:
         return gpu.getDeviceInfo().to_py()
 
-    def createBuffer(self, buffer_id: int, byte_length: int, for_write_from_cpu: bool, for_read_to_cpu: bool):
-        return gpu.createBuffer(buffer_id, byte_length, for_write_from_cpu, for_read_to_cpu)
+    def createBuffer(self, buffer_id: int, byte_length: int):
+        return gpu.createBuffer(buffer_id, byte_length)
 
     def disposeBuffer(self, buffer_id: int):
         return gpu.disposeBuffer(buffer_id)

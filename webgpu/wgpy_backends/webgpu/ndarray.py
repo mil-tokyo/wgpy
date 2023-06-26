@@ -78,9 +78,8 @@ class ndarray(NDArrayBase):
             buffer = WebGPUBuffer(self.size, self.dtype)
         self.buffer = buffer
         # TODO avoid circular referencing
-        # TODO implement
-        # from wgpy_backends.webgpu.webgpu_array_func import WebGPUArrayFunc
-        # self.array_func = WebGPUArrayFunc.instance()
+        from wgpy_backends.webgpu.webgpu_array_func import WebGPUArrayFunc
+        self.array_func = WebGPUArrayFunc.instance()
         c_contiguous = self._check_c_contiguous()
         self.flags = WebGPUArrayFlags(
             owndata=owndata,
