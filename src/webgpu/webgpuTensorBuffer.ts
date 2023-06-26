@@ -12,20 +12,27 @@ export class WebGPUTensorBuffer {
 
   // private mappedForWriteFromCPU: boolean;
 
-  constructor(public readonly bufferShape: WebGPUBufferShape) {
+  constructor(public readonly bufferShape: WebGPUBufferShape, public readonly forMetaBuffer: boolean) {
     const ctx = getNNWebGPUContext();
-    const usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST;
+    const usage = forMetaBuffer ?  GPUBufferUsage.STORAGE : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST;
     // if (bufferShape.forReadToCPU) {
     //   usage |= GPUBufferUsage.COPY_SRC;
     // }
     this.gpuBuffer = ctx.device.createBuffer({
-      mappedAtCreation: false, //bufferShape.forWriteFromCPU,
+      mappedAtCreation: forMetaBuffer, //bufferShape.forWriteFromCPU,
       size: bufferShape.byteLength,
       usage,
     });
     // this.mappedForWriteFromCPU = bufferShape.forWriteFromCPU;
     webgpuAllocCount++;
     existingBuffers.add(this);
+  }
+
+  setMetaBufferContent(data: Uint8Array): void {
+    const ab = this.gpuBuffer.getMappedRange();
+    const mappedArray = new Uint8Array(ab);
+    mappedArray.set(data);
+    this.gpuBuffer.unmap();
   }
 
   setDataRaw(data: Uint8Array): void {

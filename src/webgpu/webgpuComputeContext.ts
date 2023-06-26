@@ -18,6 +18,13 @@ export interface ComputeContextGPUMessageCreateBuffer {
   byteLength: number;
 }
 
+export interface ComputeContextGPUMessageCreateMetaBuffer {
+  method: 'gpu.createMetaBuffer';
+  id: number;
+  byteLength: number;
+  data: Uint8Array;
+}
+
 export interface ComputeContextGPUMessageDisposeBuffer {
   method: 'gpu.disposeBuffer';
   id: number;
@@ -50,6 +57,7 @@ export interface ComputeContextGPUMessageRunKernel {
 export type ComputeContextGPUMessage =
   | ComputeContextGPUMessageAddKernel
   | ComputeContextGPUMessageCreateBuffer
+  | ComputeContextGPUMessageCreateMetaBuffer
   | ComputeContextGPUMessageDisposeBuffer
   | ComputeContextGPUMessageGetData
   | ComputeContextGPUMessageRunKernel
@@ -67,7 +75,19 @@ export class ComputeContextGPU {
   ) {
     const tensorBuffer = new WebGPUTensorBuffer({
       byteLength,
-    });
+    }, false);
+    this.tensorBuffers.set(id, tensorBuffer);
+  }
+
+  createMetaBuffer(
+    id: number,
+    byteLength: number,
+    data: Uint8Array,
+  ) {
+    const tensorBuffer = new WebGPUTensorBuffer({
+      byteLength,
+    }, true);
+    tensorBuffer.setMetaBufferContent(data);
     this.tensorBuffers.set(id, tensorBuffer);
   }
 
@@ -128,6 +148,9 @@ export class ComputeContextGPU {
           message.id,
           message.byteLength,
         );
+        break;
+      case 'gpu.createMetaBuffer':
+        this.createMetaBuffer(message.id, message.byteLength, message.data);
         break;
       case 'gpu.disposeBuffer':
         this.disposeBuffer(message.id);

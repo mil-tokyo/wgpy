@@ -1,6 +1,7 @@
 import math
 from typing import List, Optional, Tuple, Union
 import numpy as np
+from wgpy_backends.webgpu.webgpu_buffer import create_meta_buffer_from_structure
 from wgpy_backends.webgpu.platform import get_platform
 from wgpy_backends.webgpu.ndarray import ndarray
 from wgpy_backends.webgpu.webgpu_buffer import WebGPUBuffer
@@ -95,9 +96,9 @@ var<storage,read> array_b: array<f32>;
 var<storage,read_write> array_c: array<f32>;
 
 struct CMeta {
-  M: f32,
-  N: f32,
-  K: f32,
+  M: u32,
+  N: u32,
+  K: u32,
   alpha: f32,
 }
 
@@ -108,9 +109,9 @@ var<storage,read> cmeta: CMeta;
 fn main(
   @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
-  var M: u32 = u32(cmeta.M);
-  var N: u32 = u32(cmeta.N);
-  var K: u32 = u32(cmeta.K);
+  var M: u32 = cmeta.M;
+  var N: u32 = cmeta.N;
+  var K: u32 = cmeta.K;
   var x: u32 = global_id.x;
   var y: u32 = global_id.y;
   if (x >= N || y >= M) {
@@ -128,9 +129,7 @@ fn main(
         # TODO: consider strides
         assert lhs.flags.c_contiguous_full
         assert rhs.flags.c_contiguous_full
-        # TODO: allow mix of int32 (size), float32 (alpha)
-        meta = WebGPUBuffer(4, np.dtype(np.float32))
-        meta.set_data(np.array([m, n, k, 1.0], dtype=np.float32))
+        meta = create_meta_buffer_from_structure((m, n, k, 1.0), 'u4,u4,u4,f4')
         if out is None:
             out = ndarray((m, n), lhs.dtype)
         else:
@@ -141,4 +140,5 @@ fn main(
             'tensors': [lhs.buffer.buffer_id, rhs.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
             'workGroups': {'x': int(math.ceil(n/8)), 'y': int(math.ceil(m/8)), 'z': 1},
         })
+
         return out

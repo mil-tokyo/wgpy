@@ -156,6 +156,24 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
         byteLength,
       });
     },
+    createMetaBuffer: (
+      id: number,
+      byteLength: number,
+    ) => {
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      const transferData = new Uint8Array(byteLength);
+      transferData.set(dataSrc);
+      postToMain({
+        method: 'gpu.createMetaBuffer',
+        id,
+        byteLength,
+        data: transferData
+      }, [transferData.buffer]);
+    },
     disposeBuffer: (id: number) => {
       postToMain({ method: 'gpu.disposeBuffer', id });
     },

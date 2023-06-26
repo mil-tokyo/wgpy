@@ -9,6 +9,9 @@ class WebGPUPlatform:
     def createBuffer(self, buffer_id: int, byte_length: int):
         return gpu.createBuffer(buffer_id, byte_length)
 
+    def createMetaBuffer(self, buffer_id: int, byte_length: int):
+        return gpu.createMetaBuffer(buffer_id, byte_length)
+
     def disposeBuffer(self, buffer_id: int):
         return gpu.disposeBuffer(buffer_id)
     

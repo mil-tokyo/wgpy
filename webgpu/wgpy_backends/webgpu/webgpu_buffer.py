@@ -43,8 +43,16 @@ def _pool_get(texture_shape: WebGPUArrayTextureShape) -> Optional[int]:
         return _pool[texture_shape].pop()
     return None
 
-class WebGPUBuffer:
+def _get_comm_buf(byte_size: int) -> np.ndarray:
+    if WebGPUBuffer._comm_buf is None or WebGPUBuffer._comm_buf.size < byte_size:
+        WebGPUBuffer._comm_buf = np.empty((max(byte_size, 1024 * 1024),), dtype=np.uint8)
+        get_platform().setCommBuf(WebGPUBuffer._comm_buf)
+    return WebGPUBuffer._comm_buf
+
+class WebGPUBufferBase:
     buffer_id: int
+
+class WebGPUBuffer(WebGPUBufferBase):
     size: int # Logical number of elements (May differ from the number of elements in the physical buffer)
     dtype: np.dtype # logical type (may be different from physical representation in WebGPU)
     texture_shape: WebGPUArrayTextureShape
@@ -74,18 +82,13 @@ class WebGPUBuffer:
         _pool_put(self.texture_shape, self.buffer_id)
         # get_platform().disposeBuffer(self.buffer_id)
     
-    def _get_comm_buf(self, byte_size: int) -> np.ndarray:
-        if WebGPUBuffer._comm_buf is None or WebGPUBuffer._comm_buf.size < byte_size:
-            WebGPUBuffer._comm_buf = np.empty((max(byte_size, 1024 * 1024),), dtype=np.uint8)
-            get_platform().setCommBuf(WebGPUBuffer._comm_buf)
-        return WebGPUBuffer._comm_buf
     
     def set_data(self, array: np.ndarray):
         if self.size == 0:
             return
         # cast array of type float to float32, int or bool to int32
         dtype = {np.dtype(np.bool_): np.dtype(np.int32), np.dtype(np.uint8): np.dtype(np.int32), np.dtype(np.int32): np.dtype(np.int32), np.dtype(np.float32): np.dtype(np.float32)}[self.dtype]
-        buf = self._get_comm_buf(self.texture_shape.byte_length)
+        buf = _get_comm_buf(self.texture_shape.byte_length)
         packed = buf.view(dtype)
         packed[:array.size] = array.ravel()
         get_platform().setData(self.buffer_id, self.texture_shape.byte_length)
@@ -105,7 +108,7 @@ class WebGPUBuffer:
             return np.zeros((0,), dtype=original_dtype)
         performance_metrics['webgpu.buffer.read_count'] += 1
         dtype = {np.dtype(np.bool_): np.dtype(np.int32), np.dtype(np.uint8): np.dtype(np.int32), np.dtype(np.int32): np.dtype(np.int32), np.dtype(np.float32): np.dtype(np.float32)}[self.dtype]
-        buf = self._get_comm_buf(self.texture_shape.byte_length)
+        buf = _get_comm_buf(self.texture_shape.byte_length)
         get_platform().getData(self.buffer_id, self.texture_shape.byte_length)
         performance_metrics['webgpu.buffer.read_size'] += self.texture_shape.byte_length
         if self.size <= 1:
@@ -113,3 +116,59 @@ class WebGPUBuffer:
         view = buf.view(dtype)[:self.size]
 
         return view.copy().astype(original_dtype, copy=False)
+
+# TODO: meta buffer
+# create_meta_buffer(bytes) -> WebGPUMetaBuffer
+# upload binary on create. pool and reuse after it is deleted.
+
+_meta_pool = defaultdict(list)
+
+class WebGPUMetaBuffer(WebGPUBufferBase):
+    _data: bytes
+
+    def __init__(self, data: bytes, pooled_buffer_id: Optional[int]) -> None:
+        super().__init__()
+
+        self._data = data
+        if pooled_buffer_id is not None:
+            self.buffer_id = pooled_buffer_id
+        else:
+            self.buffer_id = WebGPUBuffer.next_id
+            WebGPUBuffer.next_id += 1
+
+            buf = _get_comm_buf(len(data))
+            packed = buf.view(np.uint8)
+            packed[:len(data)] = np.frombuffer(data, dtype=np.uint8)
+            get_platform().createMetaBuffer(self.buffer_id, len(data))
+
+            performance_metrics['webgpu.buffer.create'] += 1
+            performance_metrics['webgpu.buffer.buffer_count'] += 1
+            performance_metrics['webgpu.buffer.buffer_size'] += len(data)
+            performance_metrics['webgpu.buffer.buffer_count_max'] = max(performance_metrics['webgpu.buffer.buffer_count_max'], performance_metrics['webgpu.buffer.buffer_count'])
+            performance_metrics['webgpu.buffer.buffer_size_max'] = max(performance_metrics['webgpu.buffer.buffer_size_max'], performance_metrics['webgpu.buffer.buffer_size'])
+
+    @property
+    def data(self):
+        return self._data
+    
+    def __del__(self):
+        _meta_pool[self._data].append(self.buffer_id)
+
+
+def create_meta_buffer(data: bytes) -> WebGPUMetaBuffer:
+    pooled = _meta_pool[data]
+    pooled_buffer_id = None
+    if len(pooled) > 0:
+        pooled_buffer_id = pooled.pop()
+    new_buf = WebGPUMetaBuffer(data, pooled_buffer_id=pooled_buffer_id)
+    _meta_pool[data] = new_buf
+    return new_buf
+
+def create_meta_buffer_from_structure(data_tuple: tuple, dtype) -> WebGPUMetaBuffer:
+    """
+    example: data_tuple = (2, 1.5), dtype = "i4,f4"
+    """
+    structured_array = np.array([data_tuple], dtype=dtype)
+    data = structured_array.tobytes()
+    return create_meta_buffer(data)
+
