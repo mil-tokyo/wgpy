@@ -2,7 +2,10 @@ import math
 import pytest
 import numpy as np
 import wgpy as cp
-from wgpy_backends.webgl.elementwise_kernel import ElementwiseKernel
+try:
+    from wgpy_backends.webgl.elementwise_kernel import ElementwiseKernel
+except ImportError:
+    pytest.skip("WebGL is not available", allow_module_level=True)
 
 def allclose(expected, actual):
     np.testing.assert_allclose(expected, actual, rtol=1e-2, atol=1e-2)

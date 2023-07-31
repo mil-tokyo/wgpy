@@ -2,7 +2,14 @@ import math
 import pytest
 import numpy as np
 import wgpy as cp
-from wgpy_backends.webgl.texture import WebGLArrayTextureShape, WebGL2RenderingContext, enqueue_default_texture_shape
+
+has_webgl = False
+try:
+    from wgpy_backends.webgl.texture import WebGLArrayTextureShape, WebGL2RenderingContext, enqueue_default_texture_shape
+    has_webgl = True
+except ImportError:
+    pass
+webgl_only = pytest.mark.skipif(not has_webgl, reason="WebGL backend is not available")
 
 def allclose(expected, actual):
     np.testing.assert_allclose(expected, actual, rtol=1e-2, atol=1e-2)
@@ -97,6 +104,7 @@ def test_radd_scalar():
     t2 = n2 + t1
     allclose(n2 + n1, cp.asnumpy(t2))
 
+@webgl_only
 def test_sub_irregular_texture_1():
     enqueue_default_texture_shape(
         WebGLArrayTextureShape(height=1, width=4, depth=1, dim='2D'),
@@ -112,6 +120,7 @@ def test_sub_irregular_texture_1():
     allclose(n1 - n2, n3)
 
 
+@webgl_only
 def test_sub_irregular_texture_2():
     shape = (15, 823) # 12345
     size = shape[0] * shape[1]
@@ -129,6 +138,8 @@ def test_sub_irregular_texture_2():
     n3 = cp.asnumpy(t3)
     allclose(n1 - n2, n3)
 
+
+@webgl_only
 def test_sub_irregular_texture_3():
     shape = (15, 823) # 12345
     size = shape[0] * shape[1]
@@ -147,6 +158,7 @@ def test_sub_irregular_texture_3():
     allclose(n1 - n2, n3)
 
 
+@webgl_only
 def test_sub_irregular_texture_4():
     shape = (15, 823) # 12345
     size = shape[0] * shape[1]
