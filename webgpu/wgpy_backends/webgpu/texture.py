@@ -9,6 +9,7 @@ _dtype_to_logical_dtype = {
     np.dtype(np.uint32): 'u32',
     np.dtype(np.int32): 'i32',
     np.dtype(np.int64): 'i32', # may overflow
+    np.dtype(np.float16): 'f32', # f16 may be used in the future (platform-dependent)
     np.dtype(np.float32): 'f32',
     np.dtype(np.float64): 'f32', # may overflow
 }
@@ -19,6 +20,7 @@ _dtype_to_storage_dtype = {
     np.dtype(np.uint32): 'u32',
     np.dtype(np.int32): 'i32',
     np.dtype(np.int64): 'i32', # may overflow
+    np.dtype(np.float16): 'f32', # f16 may be used in the future (platform-dependent)
     np.dtype(np.float32): 'f32',
     np.dtype(np.float64): 'f32', # may overflow
 }
