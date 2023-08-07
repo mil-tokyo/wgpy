@@ -1,25 +1,12 @@
 from typing import Optional, Tuple, Union
 import numpy as np
+from wgpy_backends.webgpu.webgpu_data_type import WebGPULogicalDType, WebGPUStorageDType
 from wgpy_backends.webgpu.texture import WebGPUArrayTextureShape
 from wgpy.common.ndarray_base import NDArrayBase, A
 from wgpy_backends.webgpu.device import Device
 from wgpy.common.indexing import calc_strides
 from wgpy.common.shape_util import args_to_tuple_of_int, calculate_c_contiguous_strides
 from wgpy_backends.webgpu.webgpu_buffer import WebGPUBuffer
-
-pass_types = set(np.dtype(t) for t in [np.bool_, np.uint8, np.int32, np.float32])
-type_maps = {
-    np.dtype(np.float64): np.dtype(np.float32),
-    np.dtype(np.int64): np.dtype(np.int32),
-}
-
-def map_dtype_to_webgpu(dtype: np.dtype) -> np.dtype:
-    if dtype in pass_types:
-        return dtype
-    new_dtype = type_maps.get(dtype)
-    if new_dtype is None:
-        raise NotImplementedError(f"dtype={dtype} is not implemented in webgpu.")
-    return new_dtype
 
 class WebGPUArrayFlags:
     owndata: bool
@@ -53,8 +40,7 @@ class ndarray(NDArrayBase):
         super().__init__()
         assert isinstance(shape, tuple)
         self.shape = shape
-        # TODO: Leave dtype as the requested type and provide a separate attribute for the physical type
-        self.dtype = map_dtype_to_webgpu(np.dtype(dtype))
+        self.dtype = np.dtype(dtype)
         self.ndim = len(shape)
         size = 1
         for i in range(self.ndim):

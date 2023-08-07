@@ -1,8 +1,10 @@
 from collections import defaultdict
 from typing import Optional
 import numpy as np
+from wgpy_backends.webgpu.webgpu_data_type import WebGPULogicalDType, WebGPUStorageDType
 from wgpy_backends.webgpu.texture import WebGPUArrayTextureShape, get_default_texture_shape
 from wgpy_backends.webgpu.platform import get_platform
+
 
 performance_metrics = {
     'webgpu.buffer.create': 0,
@@ -54,7 +56,7 @@ class WebGPUBufferBase:
 
 class WebGPUBuffer(WebGPUBufferBase):
     size: int # Logical number of elements (May differ from the number of elements in the physical buffer)
-    dtype: np.dtype # logical type (may be different from physical representation in WebGPU)
+    dtype: np.dtype # ndarray logical type (may be different from physical representation in WebGPU)
     texture_shape: WebGPUArrayTextureShape
 
     _comm_buf: Optional[np.ndarray] = None
@@ -86,10 +88,8 @@ class WebGPUBuffer(WebGPUBufferBase):
     def set_data(self, array: np.ndarray):
         if self.size == 0:
             return
-        # cast array of type float to float32, int or bool to int32
-        dtype = {np.dtype(np.bool_): np.dtype(np.int32), np.dtype(np.uint8): np.dtype(np.int32), np.dtype(np.int32): np.dtype(np.int32), np.dtype(np.float32): np.dtype(np.float32)}[self.dtype]
         buf = _get_comm_buf(self.texture_shape.byte_length)
-        packed = buf.view(dtype)
+        packed = buf.view(self.texture_shape.storage_dtype_numpy)
         packed[:array.size] = array.ravel()
         get_platform().setData(self.buffer_id, self.texture_shape.byte_length)
         performance_metrics['webgpu.buffer.write_count'] += 1
@@ -100,26 +100,20 @@ class WebGPUBuffer(WebGPUBufferBase):
             performance_metrics['webgpu.buffer.write_scalar_count'] += 1
 
     def get_data(self) -> np.ndarray:
-        # TODO Sorting out dtype, whether it is a WebGPU internal representation or ndarray dtype.
         return self._get_data_internal(self.dtype)
         
     def _get_data_internal(self, original_dtype: np.dtype):
         if self.size == 0:
             return np.zeros((0,), dtype=original_dtype)
         performance_metrics['webgpu.buffer.read_count'] += 1
-        dtype = {np.dtype(np.bool_): np.dtype(np.int32), np.dtype(np.uint8): np.dtype(np.int32), np.dtype(np.int32): np.dtype(np.int32), np.dtype(np.float32): np.dtype(np.float32)}[self.dtype]
         buf = _get_comm_buf(self.texture_shape.byte_length)
         get_platform().getData(self.buffer_id, self.texture_shape.byte_length)
         performance_metrics['webgpu.buffer.read_size'] += self.texture_shape.byte_length
         if self.size <= 1:
             performance_metrics['webgpu.buffer.read_scalar_count'] += 1
-        view = buf.view(dtype)[:self.size]
+        view = buf.view(self.texture_shape.storage_dtype_numpy)[:self.size]
 
         return view.copy().astype(original_dtype, copy=False)
-
-# TODO: meta buffer
-# create_meta_buffer(bytes) -> WebGPUMetaBuffer
-# upload binary on create. pool and reuse after it is deleted.
 
 _meta_pool = defaultdict(list)
 
@@ -161,7 +155,6 @@ def create_meta_buffer(data: bytes) -> WebGPUMetaBuffer:
     if len(pooled) > 0:
         pooled_buffer_id = pooled.pop()
     new_buf = WebGPUMetaBuffer(data, pooled_buffer_id=pooled_buffer_id)
-    _meta_pool[data] = new_buf
     return new_buf
 
 def create_meta_buffer_from_structure(data_tuple: tuple, dtype) -> WebGPUMetaBuffer:
