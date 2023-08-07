@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Optional
+from typing import List, Optional
 import numpy as np
 from wgpy_backends.webgpu.webgpu_data_type import WebGPULogicalDType, WebGPUStorageDType
 from wgpy_backends.webgpu.texture import WebGPUArrayTextureShape, get_default_texture_shape
@@ -149,6 +149,20 @@ class WebGPUMetaBuffer(WebGPUBufferBase):
         _meta_pool[self._data].append(self.buffer_id)
 
 
+class WebGPUMetaBufferItem:
+    name: str
+    native_type: str
+    numpy_dtype_str: str
+
+    def __init__(self, name: str, native_type: str, numpy_dtype_str: Optional[str]=None) -> None:
+        self.name = name
+        self.native_type = native_type
+        self.numpy_dtype_str = numpy_dtype_str or {'f32': 'f4', 'i32': 'i4', 'u32': 'u4'}[native_type]
+    
+    def __repr__(self) -> str:
+        return f"WebGPUMetaBufferItem('{self.name}', '{self.native_type}', '{self.numpy_dtype_str}')"
+
+
 def create_meta_buffer(data: bytes) -> WebGPUMetaBuffer:
     pooled = _meta_pool[data]
     pooled_buffer_id = None
@@ -165,3 +179,11 @@ def create_meta_buffer_from_structure(data_tuple: tuple, dtype) -> WebGPUMetaBuf
     data = structured_array.tobytes()
     return create_meta_buffer(data)
 
+def create_meta_buffer_from_dict(data_dict: dict, item_definitions: List[WebGPUMetaBufferItem]) -> WebGPUMetaBuffer:
+    """
+    example: data_dict = {"a": 2, "b": 1.5}, item_definitions = [WebGPUMetaBufferItem("a", "i32"), WebGPUMetaBufferItem("b", "f32")]
+    """
+    dtype = np.dtype([(item.name, item.numpy_dtype_str) for item in item_definitions])
+    structured_array = np.array([tuple(data_dict[item.name] for item in item_definitions)], dtype=dtype)
+    data = structured_array.tobytes()
+    return create_meta_buffer(data)

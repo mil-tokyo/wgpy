@@ -3,6 +3,7 @@
 import re
 from typing import List, NamedTuple, Optional, Tuple
 import numpy as np
+from wgpy_backends.webgpu.webgpu_buffer import WebGPUMetaBufferItem
 from wgpy_backends.webgpu.ndarray import ndarray
 from wgpy_backends.webgpu.shader_util import native_scalar_type_for_dtype, native_scalar_type_to_default_dtype
 
@@ -17,10 +18,6 @@ class OutParam(NamedTuple):
     name: str
     native_type_or_generic: str # native type or generic
     generic: bool
-
-class UniformDefinition(NamedTuple):
-    name: str
-    native_type: str # generic is not supported
 
 def parse_in_params(in_params: str) -> List[InParam]:
     if re.match('^\\s*$', in_params):
@@ -40,7 +37,7 @@ def parse_out_params(out_params: str) -> OutParam:
     type, name = m.groups()
     return OutParam(name=name, native_type_or_generic=type, generic=len(type)==1)
 
-def parse_uniforms(uniforms: str) -> List[UniformDefinition]:
+def parse_uniforms(uniforms: str) -> List[WebGPUMetaBufferItem]:
     if re.match('^\\s*$', uniforms):
         return []
     params = []
@@ -48,7 +45,7 @@ def parse_uniforms(uniforms: str) -> List[UniformDefinition]:
         m = re.match("^\\s*(f32|i32|u32)\\s+([a-zA-Z][a-zA-Z0-9_]*)\\s*$", param)
         assert m is not None, f"syntax error in uniforms: {uniforms}"
         type, name = m.groups()
-        params.append(UniformDefinition(name=name, native_type=type))
+        params.append(WebGPUMetaBufferItem(name=name, native_type=type))
     return params
 
 class GenericResolveResult(NamedTuple):
@@ -61,8 +58,7 @@ def resolve_generic_type(in_array_impls: List[ndarray], explicit_out_array_impl:
     # Assign if output type is undefined
     generic_assignments = {}
     for k, array_impl in zip(parsed_in_params, in_array_impls):
-        #array_native_type = native_scalar_type_for_type[array.buffer.texture_shape.type]
-        array_native_type = native_scalar_type_for_dtype[array_impl.dtype]
+        array_native_type = array_impl.buffer.texture_shape.logical_dtype
         array_dtype = array_impl.dtype
         if k.generic:
             already_assigned_type = generic_assignments.get(k.native_type_or_generic)
@@ -100,23 +96,23 @@ def resolve_generic_type(in_array_impls: List[ndarray], explicit_out_array_impl:
 
     define_statements = ""
     for k, (_, array_native_type) in generic_assignments.items():
-        define_statements += f"#define {k} {array_native_type}\n"
+        define_statements += f"alias {k} = {array_native_type};\n"
     return GenericResolveResult(define_statements=define_statements, out_dtype=out_dtype)
 
 def make_input_uniform(param: InParam, webgl_array: ndarray):
     name = param.name
     uniforms = []
-    uniforms.append({'type': 'int', 'name': f'_{name}_offset', 'value': webgl_array.offset // webgl_array.itemsize})
+    uniforms.append({'type': 'i32', 'name': f'_{name}_offset', 'value': webgl_array.offset // webgl_array.itemsize})
     if param.raw:
         for d in range(webgl_array.ndim):
-            uniforms.append({'type': 'int', 'name': f'_{name}_shape_{d}', 'value': webgl_array.shape[d]})
+            uniforms.append({'type': 'i32', 'name': f'_{name}_shape_{d}', 'value': webgl_array.shape[d]})
     for d in range(webgl_array.ndim):
-        uniforms.append({'type': 'int', 'name': f'_{name}_stride_{d}', 'value': webgl_array.strides[d] // webgl_array.itemsize})
+        uniforms.append({'type': 'i32', 'name': f'_{name}_stride_{d}', 'value': webgl_array.strides[d] // webgl_array.itemsize})
     return uniforms
 
 def make_input_reduction_uniform(input_shape: Tuple[int, ...]):
     uniforms = []
-    uniforms.append({'type': 'int', 'name': f'_in_ind_size', 'value': int(np.prod(input_shape))})
+    uniforms.append({'type': 'i32', 'name': f'_in_ind_size', 'value': int(np.prod(input_shape))})
     return uniforms
 
 def make_output_uniform(param: OutParam, webgl_array: ndarray, reduction: bool):
@@ -124,17 +120,14 @@ def make_output_uniform(param: OutParam, webgl_array: ndarray, reduction: bool):
         raise NotImplementedError('In-place update of array view is not yet implemented.')
     name = param.name
     uniforms = []
-    uniforms.append({'type': 'int', 'name': f'_{name}_texture_w', 'value': webgl_array.buffer.texture_shape.width})
-    if webgl_array.buffer.texture_shape.dim == '2DArray':
-        uniforms.append({'type': 'int', 'name': f'_{name}_texture_h', 'value': webgl_array.buffer.texture_shape.height})
 
     for d in range(webgl_array.ndim):
-        uniforms.append({'type': 'int', 'name': f'_{name}_shape_{d}', 'value': webgl_array.shape[d]})
+        uniforms.append({'type': 'i32', 'name': f'_{name}_shape_{d}', 'value': webgl_array.shape[d]})
     if reduction:
         # cupy's _out_ind.size()
-        uniforms.append({'type': 'int', 'name': f'_out_ind_size', 'value': webgl_array.size})
+        uniforms.append({'type': 'i32', 'name': f'_out_ind_size', 'value': webgl_array.size})
     else:
         # elementwise
         # cupy's _ind.size()
-        uniforms.append({'type': 'int', 'name': f'_ind_size', 'value': webgl_array.size})
+        uniforms.append({'type': 'i32', 'name': f'_ind_size', 'value': webgl_array.size})
     return uniforms

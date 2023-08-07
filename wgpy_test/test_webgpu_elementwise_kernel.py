@@ -4,7 +4,7 @@ import numpy as np
 import wgpy as cp
 try:
     from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
-except ImportError:
+except ImportError as ex:
     pytest.skip("WebGPU is not available", allow_module_level=True)
 
 def allclose(expected, actual):
@@ -12,8 +12,8 @@ def allclose(expected, actual):
 
 def test_elementwise_1():
     kernel = ElementwiseKernel(
-        in_params="float x, float y",
-        out_params="float z",
+        in_params="f32 x, f32 y",
+        out_params="f32 z",
         operation="z = x - y",
         name="test_elementwise_1",
         uniforms="",
@@ -24,10 +24,15 @@ def test_elementwise_1():
     z_gpu = kernel(cp.asarray(x), cp.asarray(y))
     allclose(x - y, cp.asnumpy(z_gpu))
 
+    # broadcasting
+    x = np.array([[1.0, 2.0, -3.0, 2.5]], dtype=np.float32)
+    y = np.array([[0.25], [10.0], [9.0], [1.0]], dtype=np.float32)
+    z_gpu = kernel(cp.asarray(x), cp.asarray(y))
+    allclose(x - y, cp.asnumpy(z_gpu))
 
 def test_elementwise_raw_1():
     kernel = ElementwiseKernel(
-        in_params="raw T x, int p",
+        in_params="raw T x, i32 p",
         out_params="T y",
         operation="y = x(p)",
         name="test_elementwise_raw_1",
@@ -45,3 +50,5 @@ def test_elementwise_raw_1():
     # raw T x is accessed as if x is "c-contiguous" flattened array even if it has different strides
     y_gpu = kernel(cp.asarray(x).T, cp.asarray(p))
     allclose(x.T.flatten()[p], cp.asnumpy(y_gpu))
+
+# TODO: user-defined uniform
