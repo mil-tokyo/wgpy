@@ -1,5 +1,6 @@
 import math
 from typing import Optional
+from wgpy_backends.webgpu import common_reduction
 from wgpy_backends.webgpu import common_ufunc
 from wgpy_backends.webgpu.webgpu_buffer import create_meta_buffer_from_structure
 from wgpy_backends.webgpu.platform import get_platform
@@ -14,7 +15,7 @@ class WebGPUArrayFunc:
 
     def __init__(self) -> None:
         self.ufunc = common_ufunc
-        # self.reduction = common_reduction
+        self.reduction = common_reduction
         pass
 
     @staticmethod
