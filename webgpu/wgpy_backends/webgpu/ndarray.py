@@ -76,20 +76,19 @@ class ndarray(NDArrayBase):
 
     _astype_kernel = None
     def astype(self, dtype, *args, copy=True, **kwargs):
-        raise NotImplementedError
-        # if copy is False and dtype == self.dtype:
-        #     return self
-        # if ndarray._astype_kernel is None:
-        #     from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
-        #     ndarray._astype_kernel = ElementwiseKernel(
-        #         in_params="T in0",
-        #         out_params="V out0",
-        #         operation="out0 = V(in0)",
-        #         name="astype"
-        #     )
-        # from wgpy.construct import empty
-        # out = empty(self.shape, dtype=dtype)
-        # return ndarray._astype_kernel(self, out)
+        if copy is False and dtype == self.dtype:
+            return self
+        if ndarray._astype_kernel is None:
+            from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
+            ndarray._astype_kernel = ElementwiseKernel(
+                in_params="T in0",
+                out_params="V out0",
+                operation="out0 = V(in0)",
+                name="astype"
+            )
+        from wgpy.construct import empty
+        out = empty(self.shape, dtype=dtype)
+        return ndarray._astype_kernel(self, out)
     
     def copy(self):
         return +self # __pos__
