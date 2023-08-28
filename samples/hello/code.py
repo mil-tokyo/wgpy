@@ -3,7 +3,7 @@ import numpy as np
 import wgpy as cp
 from js import pythonIO
 
-print("hello world from code")
+print("backend name:", cp.get_backend_name())
 
 in_data = np.array(json.loads(pythonIO.getInputData()), dtype=np.float32)
 

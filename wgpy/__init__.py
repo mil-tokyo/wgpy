@@ -7,6 +7,7 @@ from wgpy.unary import *
 from wgpy.binary import *
 from wgpy.manipulation import *
 from wgpy.reduction import *
+from wgpy_backends.runtime import get_backend_name as _runtime_get_backend_name
 
 __version__ = "1.0.0"
 
@@ -38,3 +39,10 @@ def fuse():
             return f(*args, **kwargs)
         return wrapper
     return func
+
+def get_backend_name() -> str:
+    """
+    Returns the name of the backend currently in use.
+    Possible values are 'webgpu' and 'webgl'.
+    """
+    return _runtime_get_backend_name()
