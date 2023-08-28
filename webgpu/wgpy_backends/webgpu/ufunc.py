@@ -106,6 +106,10 @@ class ufunc:
             if dst_dtype in in_types:
                 in_arrays = [array.astype(dst_dtype) if array.dtype != dst_dtype else array for array in in_arrays]
                 matched_op = find_matched_op()
+            if matched_op is None:
+                if np.dtype(np.float64) in in_types:
+                    in_arrays = [array.astype(dst_dtype) if array.dtype != dst_dtype else array for array in in_arrays]
+                    matched_op = find_matched_op()
 
 
         assert matched_op is not None, f"ufunc: type assignment failed for input types={[ary.dtype for ary in in_arrays]}"
