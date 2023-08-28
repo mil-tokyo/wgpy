@@ -1,6 +1,11 @@
+import { WgpyBackend } from './backend';
 import { GLKernelRunDescriptor } from './webgl/webglComputeContext';
 import { TensorTextureShape } from './webgl/webglContext';
 import { GPUKernelRunDescriptor } from './webgpu/webgpuComputeContext';
+
+export interface WgpyInitWorkerResult {
+  backend: WgpyBackend;
+}
 
 function dictToObj(dict: any) {
   // Convert python dict to JS object. func({"x":1,"y":[2,3]}) in python
@@ -90,8 +95,7 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
 
       if (size * ctor.BYTES_PER_ELEMENT > placeholderBuffer.byteLength) {
         throw new Error(
-          `buffer size insufficient: ${
-            size * ctor.BYTES_PER_ELEMENT
+          `buffer size insufficient: ${size * ctor.BYTES_PER_ELEMENT
           } bytes required`
         );
       }
@@ -210,8 +214,7 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
 
       if (byteLength > placeholderBuffer.byteLength) {
         throw new Error(
-          `buffer size insufficient: ${
-            byteLength
+          `buffer size insufficient: ${byteLength
           } bytes required`
         );
       }
@@ -258,9 +261,12 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
   };
 }
 
-export async function initWorker() {
-  let initPromiseResolve: () => void = () => {
+export async function initWorker(): Promise<WgpyInitWorkerResult> {
+  let initPromiseResolve: (initResult: WgpyInitWorkerResult) => void = () => {
     throw new Error('unexpected call of initPromiseResolve');
+  };
+  let initPromiseReject: (reason: any) => void = () => {
+    throw new Error('unexpected call of initPromiseReject');
   };
   addEventListener('message', (e) => {
     if (e.data.namespace !== 'wgpy') {
@@ -268,24 +274,32 @@ export async function initWorker() {
     }
     switch (e.data.method) {
       case 'initComplete':
+        let backend: WgpyBackend | null = null;
         if (e.data.gl != null) {
+          backend = 'webgl';
           initGLInterface(true, e.data.gl);
         } else {
           initGLInterface(false, null);
         }
         if (e.data.gpu != null) {
+          backend = 'webgpu';
           initGPUInterface(true, e.data.gpu);
         } else {
           initGPUInterface(false, null);
         }
-        initPromiseResolve();
+        if (backend) {
+          initPromiseResolve({ backend });
+        } else {
+          initPromiseReject(new Error('wgpy: failed to initialize any backend'));
+        }
         break;
     }
   });
 
   postToMain({ method: 'init' });
 
-  return new Promise<void>((resolve) => {
+  return new Promise<WgpyInitWorkerResult>((resolve, reject) => {
     initPromiseResolve = resolve;
+    initPromiseReject = reject;
   });
 }

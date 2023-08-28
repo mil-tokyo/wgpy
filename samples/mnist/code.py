@@ -29,6 +29,12 @@ np.random.seed(1)
 
 from chainer.datasets import split_dataset_random
 
+gpu_id = -1 # cpu
+try:
+    import cupy as cp
+    gpu_id = 0 # gpu
+except:
+    pass
 
 train_iter = iterators.SerialIterator(train, batchsize)
 
@@ -50,7 +56,7 @@ class MLP(Chain):
         return self.l3(h2)
 
 class CNN(Chain):
-    def __init__(self, ch=8, n_out=10):
+    def __init__(self, ch=64, n_out=10):
         super().__init__()
         with self.init_scope():
             self.conv1 = L.Convolution2D(1, ch, ksize=3, stride=1, pad=1)
@@ -73,7 +79,6 @@ class CNN(Chain):
         h = self.linear(h)
         return h
 
-gpu_id = {"cpu": -1, "webgl": 0, "webgpu": 0}[pythonIO.config.device]
 
 model = {"MLP": MLP, "CNN": CNN}[pythonIO.config.model]()
 
