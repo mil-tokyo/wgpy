@@ -118,7 +118,7 @@ _{name}_t1 = _{name}_t2;
 """
     if ndim > 0:
         loop_head += f"var _{name}_0: i32 = _{name}_t1;\n"
-        loop_head += f"""if (_{name}_0 > cmeta._{name}_shape_{0}) {{ break; }}\n"""
+        loop_head += f"""if (_{name}_0 >= cmeta._{name}_shape_{0}) {{ break; }}\n"""
     else:
         loop_head += """if (i > 0) { break; }\n"""
     loop_tail += f"""
