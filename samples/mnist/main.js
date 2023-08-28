@@ -19,7 +19,13 @@ async function run() {
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
-  await wgpy.initMain(worker, {gl: true, gpu: false});
+  const initConfig = {};
+  if (config.device === 'webgpu') {
+    initConfig.gpu = true;
+  } else {
+    initConfig.gl = true;
+  }
+  await wgpy.initMain(worker, initConfig);
 
   worker.addEventListener('message', (e) => {
     if (e.data.namespace !== 'app') {

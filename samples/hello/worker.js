@@ -15,7 +15,7 @@ async function loadPythonCode() {
   return f.text();
 }
 
-async function start(data) {
+async function start(backend, data) {
   log('Initializing wgpy worker-side javascript interface');
   await wgpy.initWorker();
 
@@ -25,7 +25,7 @@ async function start(data) {
   });
   await pyodide.loadPackage('micropip');
   await pyodide.loadPackage('numpy');
-  await pyodide.loadPackage('../../dist/wgpy_webgl-1.0.0-py3-none-any.whl');
+  await pyodide.loadPackage(`../../dist/wgpy_${backend}-1.0.0-py3-none-any.whl`);
 
   log('Loading pyodide succeeded');
   const pythonCode = await loadPythonCode();
@@ -51,7 +51,7 @@ addEventListener('message', (ev) => {
 
   switch (ev.data.method) {
     case 'start':
-      start(ev.data.data).catch((reason) => log(`Worker error: ${reason}`));
+      start(ev.data.backend, ev.data.data).catch((reason) => log(`Worker error: ${reason}`));
       break;
   }
 });

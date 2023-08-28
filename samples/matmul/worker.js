@@ -32,7 +32,8 @@ async function start(config) {
   });
   await pyodide.loadPackage('micropip');
   await pyodide.loadPackage('numpy');
-  await pyodide.loadPackage('../../dist/wgpy_webgl-1.0.0-py3-none-any.whl');
+  const backend = config.device === 'webgpu' ? 'webgpu' : 'webgl';
+  await pyodide.loadPackage(`../../dist/wgpy_${backend}-1.0.0-py3-none-any.whl`);
 
   log('Loading pyodide succeeded');
   const pythonCode = await loadPythonCode();

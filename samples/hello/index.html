@@ -10,6 +10,14 @@
 </head>
 <body>
     <h1>GPU computing with Python on web browser sample</h1>
+    <fieldset>
+        <legend>Backend</legend>
+        <input type="radio" id="webgl" name="backend" value="webgl" checked>
+        <label for="webgl">WebGL</label>
+        <br>
+        <input type="radio" id="webgpu" name="backend" value="webgpu">
+        <label for="webgpu">WebGPU</label>
+    </fieldset>
     Input array (JSON syntax): <input type="text" value="[[1, 2],[3, 0.4]]" id="inputData">
     <button type="button" id="run">Run</button>
     <div id="log"></div>

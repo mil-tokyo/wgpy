@@ -73,7 +73,7 @@ class CNN(Chain):
         h = self.linear(h)
         return h
 
-gpu_id = {"cpu": -1, "webgl": 0}[pythonIO.config.device]
+gpu_id = {"cpu": -1, "webgl": 0, "webgpu": 0}[pythonIO.config.device]
 
 model = {"MLP": MLP, "CNN": CNN}[pythonIO.config.model]()
 

@@ -8,10 +8,24 @@ function log(message) {
 async function run() {
   const inputData = JSON.parse(document.getElementById('inputData').value);
   log(`This program caluculates ${JSON.stringify(inputData)} * 2 in python`);
+  const backend = document.querySelector('input[name="backend"]:checked').value;
+  console.log(`backend: ${backend}`);
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
-  await wgpy.initMain(worker, {gl: true, gpu: false});
+  const options = {};
+  switch (backend) {
+    case 'webgl':
+      options.gl = true;
+      break;
+    case 'webgpu':
+      options.gpu = true;
+      break;
+    default:
+      throw new Error(`Unknown backend ${backend}`);
+  }
+  log('Initializing wgpy main-thread-side javascript interface');
+  await wgpy.initMain(worker, options);
 
   worker.addEventListener('message', (e) => {
     if (e.data.namespace !== 'app') {
@@ -30,7 +44,7 @@ async function run() {
   });
 
   // after wgpy.initMain completed, wgpy.initWorker can be called in worker thread
-  worker.postMessage({ namespace: 'app', method: 'start', data: inputData });
+  worker.postMessage({ namespace: 'app', method: 'start', backend, data: inputData });
 }
 
 window.addEventListener('load', () => {
