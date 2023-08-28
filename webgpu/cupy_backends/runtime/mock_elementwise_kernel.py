@@ -32,25 +32,22 @@ def relu_bwd(elementwise_kernel, args):
     gx = relu_bwd_kernel(y, gy)
     return gx
 
-max_pool_fwd_kernel_indexes_for_shape = {}
+max_pool_fwd_kernel_indexes = None
 max_pool_fwd_kernel_maxval = None
 def max_pool_fwd(elementwise_kernel, args):
-    global max_pool_fwd_kernel_maxval
+    global max_pool_fwd_kernel_maxval, max_pool_fwd_kernel_indexes
     x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, y, indexes = args
     loop_max = (kh, kw)
-    max_pool_fwd_kernel_indexes = max_pool_fwd_kernel_indexes_for_shape.get(loop_max)
     if max_pool_fwd_kernel_indexes is None:
         max_pool_fwd_kernel_indexes = ElementwiseKernel(
             in_params='raw T inx',
             out_params='i32 indexes',
-            uniforms='i32 h, i32 w, i32 sy, i32 sx, i32 ph, i32 pw',
-            preamble=f'''
-const kh: i32 = {loop_max[0]};
-const kw: i32 = {loop_max[1]};
-''',
+            uniforms='i32 h, i32 w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw',
             operation=f'''
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
+let kw: i32 = cmeta.kw;
+let kh: i32 = cmeta.kh;
 let sy: i32 = cmeta.sy;
 let sx: i32 = cmeta.sx;
 let ph: i32 = cmeta.ph;
@@ -89,9 +86,8 @@ let argmax_ky: i32 = argmax_y + ph - out_y * sy;
 let argmax_kx: i32 = argmax_x + pw - out_x * sx;
 indexes = argmax_kx + kw * argmax_ky;
 ''',
-            name=f'max_pool_fwd_indexes_{loop_max[0]}_{loop_max[1]}'
+            name=f'max_pool_fwd_indexes'
         )
-        max_pool_fwd_kernel_indexes_for_shape[loop_max] = max_pool_fwd_kernel_indexes
     if max_pool_fwd_kernel_maxval is None:
         max_pool_fwd_kernel_maxval = ElementwiseKernel(
             in_params='raw T inx, S indexes',
@@ -119,38 +115,44 @@ maxval = inx(((_maxval_0 * c + _maxval_1) * h + argmax_y) * w + argmax_x);
 ''',
             name='max_pool_fwd_maxval'
         )
-    uniforms = {
+    max_pool_fwd_kernel_indexes(x, indexes, uniforms={
         'h': h,
         'w': w,
+        'kh': kh,
+        'kw': kw,
         'sy': sy,
         'sx': sx,
         'ph': ph,
         'pw': pw,
-    }
-    max_pool_fwd_kernel_indexes(x, indexes, uniforms=uniforms)
-    uniforms['kw'] = kw
-    max_pool_fwd_kernel_maxval(x, indexes, y, uniforms=uniforms)
+    })
+    max_pool_fwd_kernel_maxval(x, indexes, y, uniforms={
+        'h': h,
+        'w': w,
+#        'kh': kh,
+        'kw': kw,
+        'sy': sy,
+        'sx': sx,
+        'ph': ph,
+        'pw': pw,
+    })
     return y, indexes
 
-max_pool_bwd_kernel_for_shape = {}
+max_pool_bwd_kernel = None
 def max_pool_bwd(elementwise_kernel, args):
+    global max_pool_bwd_kernel
     gy, indexes, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, gx = args
-    loop_max = (kh, kw)
-    max_pool_bwd_kernel = max_pool_bwd_kernel_for_shape.get(loop_max)
     if max_pool_bwd_kernel is None:
         max_pool_bwd_kernel = ElementwiseKernel(
             in_params='raw T gy, raw i32 indexes',
             out_params='T gx',
-            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 sy, i32 sx, i32 ph, i32 pw',
-            preamble=f'''
-const kh: i32 = {loop_max[0]};
-const kw: i32 = {loop_max[1]};
-''',
+            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw',
             operation=f'''
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
 let out_w: i32 = cmeta.out_w;
+let kh: i32 = cmeta.kh;
+let kw: i32 = cmeta.kw;
 let sy: i32 = cmeta.sy;
 let sx: i32 = cmeta.sx;
 let ph: i32 = cmeta.ph;
@@ -183,14 +185,15 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
     }}
 }}
 ''',
-            name=f'max_pool_bwd_{loop_max[0]}_{loop_max[1]}'
+            name=f'max_pool_bwd'
         )
-        max_pool_bwd_kernel_for_shape[loop_max] = max_pool_bwd_kernel
     uniforms = {
         'h': h,
         'w': w,
         'out_h': out_h,
         'out_w': out_w,
+        'kh': kh,
+        'kw': kw,
         'sy': sy,
         'sx': sx,
         'ph': ph,
@@ -199,25 +202,22 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
     max_pool_bwd_kernel(gy, indexes, gx, uniforms=uniforms)
     return gx
 
-avg_pool_fwd_kernel_for_shape = {}
+avg_pool_fwd_kernel = None
 def avg_pool_fwd(elementwise_kernel, args):
+    global avg_pool_fwd_kernel
     x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, out = args
-    loop_max = (kh, kw)
-    avg_pool_fwd_kernel = avg_pool_fwd_kernel_for_shape.get(loop_max)
     if avg_pool_fwd_kernel is None:
         avg_pool_fwd_kernel = ElementwiseKernel(
             in_params='raw T inx',
             out_params='T oimg',
-            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff',
-            preamble=f'''
-const kh: i32 = {loop_max[0]};
-const kw: i32 = {loop_max[1]};
-''',
+            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff',
             operation=f'''
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
 let out_w: i32 = cmeta.out_w;
+let kh: i32 = cmeta.kh;
+let kw: i32 = cmeta.kw;
 let sy: i32 = cmeta.sy;
 let sx: i32 = cmeta.sx;
 let ph: i32 = cmeta.ph;
@@ -249,14 +249,15 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
 
 oimg = val * coeff;
 ''',
-            name=f'avg_pool_fwd_{loop_max[0]}_{loop_max[1]}'
+            name=f'avg_pool_fwd'
         )
-        avg_pool_fwd_kernel_for_shape[loop_max] = avg_pool_fwd_kernel
     uniforms = {
         'h': h,
         'w': w,
         'out_h': out_h,
         'out_w': out_w,
+        'kh': kh,
+        'kw': kw,
         'sy': sy,
         'sx': sx,
         'ph': ph,
@@ -266,25 +267,22 @@ oimg = val * coeff;
     avg_pool_fwd_kernel(x, out, uniforms=uniforms)
     return out
 
-avg_pool_bwd_kernel_for_shape = {}
+avg_pool_bwd_kernel = None
 def avg_pool_bwd(elementwise_kernel, args):
+    global avg_pool_bwd_kernel
     gy, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, gx = args
-    loop_max = (kh, kw)
-    avg_pool_bwd_kernel = avg_pool_bwd_kernel_for_shape.get(loop_max)
     if avg_pool_bwd_kernel is None:
         avg_pool_bwd_kernel = ElementwiseKernel(
             in_params='raw T gy',
             out_params='T gx',
-            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff',
-            preamble=f'''
-const kh: i32 = {loop_max[0]};
-const kw: i32 = {loop_max[1]};
-''',
+            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff',
             operation=f'''
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
 let out_w: i32 = cmeta.out_w;
+let kh: i32 = cmeta.kh;
+let kw: i32 = cmeta.kw;
 let sy: i32 = cmeta.sy;
 let sx: i32 = cmeta.sx;
 let ph: i32 = cmeta.ph;
@@ -316,14 +314,15 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
 
 gx = val * coeff;
 ''',
-            name=f'avg_pool_bwd_{loop_max[0]}_{loop_max[1]}'
+            name=f'avg_pool_bwd'
         )
-        avg_pool_bwd_kernel_for_shape[loop_max] = avg_pool_bwd_kernel
     uniforms = {
         'h': h,
         'w': w,
         'out_h': out_h,
         'out_w': out_w,
+        'kh': kh,
+        'kw': kw,
         'sy': sy,
         'sx': sx,
         'ph': ph,
@@ -387,28 +386,25 @@ if (in_y >= 0 && in_y < h && in_x >= 0 && in_x < w) {{
     im2col_kernel(img, col, uniforms=uniforms)
     return col
 
-col2im_kernels = {}
+col2im_kernel = None
 def col2im(elementwise_kernel, args):
+    global col2im_kernel
     col, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, dy, dx, img = args
     # col is col.reduced_view()
     assert img.ndim == 4
-    kernel_key = (kh, kw)
 
-    col2im_kernel = col2im_kernels.get(kernel_key)
     if col2im_kernel is None:
         col2im_kernel = ElementwiseKernel(
             in_params='raw T col',
             out_params='T img',
-            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx',
-            preamble=f'''
-const kh: i32 = {kh};
-const kw: i32 = {kw};
-''',
+            uniforms='i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx',
             operation=f'''
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
 let out_w: i32 = cmeta.out_w;
+let kh: i32 = cmeta.kh;
+let kw: i32 = cmeta.kw;
 let sy: i32 = cmeta.sy;
 let sx: i32 = cmeta.sx;
 let ph: i32 = cmeta.ph;
@@ -436,12 +432,13 @@ for (var ky: i32 = 0; ky < kh; ky++) {{
 ''',
             name='col2im'
         )
-        col2im_kernels[kernel_key] = col2im_kernel
     uniforms = {
         'h': h,
         'w': w,
         'out_h': out_h,
         'out_w': out_w,
+        'kh': kh,
+        'kw': kw,
         'sy': sy,
         'sx': sx,
         'ph': ph,
