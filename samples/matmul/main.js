@@ -6,11 +6,15 @@ function log(message) {
 }
 
 function getConfig() {
-  const deviceElem = document.querySelector('input[name=device]:checked');
-  const device = deviceElem?.value || 'cpu';
+  let backendOrder = [];
+  for (const backend of ['webgpu', 'webgl']) {
+    if (document.getElementById(backend).checked) {
+      backendOrder.push(backend);
+    }
+  }
   const sizesElem = document.getElementById('sizes');
   const sizes = sizesElem.value;
-  return { device, sizes };
+  return { backendOrder, sizes };
 }
 
 async function run() {
@@ -18,7 +22,13 @@ async function run() {
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
-  await wgpy.initMain(worker, {gl: true, gpu: false});
+  let initializedBackend = 'cpu';
+  try {
+    const initResult = await wgpy.initMain(worker, { backendOrder: config.backendOrder });
+    initializedBackend = initResult.backend;
+  } catch (e) {
+  }
+  log(`Initialized backend: ${initializedBackend}`);
 
   worker.addEventListener('message', (e) => {
     if (e.data.namespace !== 'app') {

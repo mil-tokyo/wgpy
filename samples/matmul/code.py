@@ -1,10 +1,15 @@
 from js import pythonIO
 import numpy as np
-import cupy as cp
+use_gpu = False
+try:
+    import cupy as cp
+    use_gpu = True
+except:
+    print("cupy is not available")
+    pass
 import json
 import time
 
-use_gpu = pythonIO.config.device != "cpu"
 
 def run_once(mat_a, mat_b):
     if use_gpu:
@@ -40,3 +45,4 @@ def bench_one(m, n, k):
 sizes = json.loads('['+pythonIO.config.sizes+']')
 for size in sizes:
     bench_one(*size)
+print("done")

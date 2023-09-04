@@ -22,7 +22,13 @@ async function loadPythonCode() {
 
 async function start(config) {
   log('Initializing wgpy worker-side javascript interface');
-  await wgpy.initWorker();
+  let initWorkerResult = null;
+  try {
+    initWorkerResult = await wgpy.initWorker();    
+  } catch (e) {
+    // if no backend is available, wgpy.initWorker throws an error.
+    log(`initWorker failed: ${e.message}`);
+  }
 
   log('Loading pyodide');
   pyodide = await loadPyodide({
@@ -32,7 +38,11 @@ async function start(config) {
   });
   await pyodide.loadPackage('micropip');
   await pyodide.loadPackage('numpy');
-  await pyodide.loadPackage('../../dist/wgpy_webgl-1.0.0-py3-none-any.whl');
+  if (initWorkerResult) {
+    // load wgpy python package corresponding to the backend.
+    // if wgpy is not initialized, wgpy (and cupy) is not available.
+    await pyodide.loadPackage(`../../dist/wgpy_${initWorkerResult.backend}-1.0.0-py3-none-any.whl`);
+  }
 
   log('Loading pyodide succeeded');
   const pythonCode = await loadPythonCode();

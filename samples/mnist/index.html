@@ -16,11 +16,12 @@
   <body>
     <h1>MNIST training on web browser</h1>
     <div>
-      Device:
-      <label><input type="radio" name="device" value="cpu" />CPU</label>
-      <label
-        ><input type="radio" name="device" value="webgl" checked />GPU (WebGL)</label
-      >
+      Backends to try:
+      <label><input type="checkbox" id="webgpu" value="webgpu" checked />WebGPU</label>
+      <label><input type="checkbox" id="webgl" value="webgl" checked />WebGL</label>
+      <p>
+        If both are checked, WebGPU is first tried. If the browser does not support it, WebGL is tried.
+      </p>
     </div>
     <div>
       Model:

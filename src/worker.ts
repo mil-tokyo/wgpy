@@ -1,6 +1,11 @@
+import { WgpyBackend } from './backend';
 import { GLKernelRunDescriptor } from './webgl/webglComputeContext';
 import { TensorTextureShape } from './webgl/webglContext';
 import { GPUKernelRunDescriptor } from './webgpu/webgpuComputeContext';
+
+export interface WgpyInitWorkerResult {
+  backend: WgpyBackend;
+}
 
 function dictToObj(dict: any) {
   // Convert python dict to JS object. func({"x":1,"y":[2,3]}) in python
@@ -90,8 +95,7 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
 
       if (size * ctor.BYTES_PER_ELEMENT > placeholderBuffer.byteLength) {
         throw new Error(
-          `buffer size insufficient: ${
-            size * ctor.BYTES_PER_ELEMENT
+          `buffer size insufficient: ${size * ctor.BYTES_PER_ELEMENT
           } bytes required`
         );
       }
@@ -133,6 +137,12 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
 }
 
 function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
+  let sharedBufferSent = false;
+  let notifyBuffer: SharedArrayBuffer | undefined = undefined;
+  let notifyBufferView: Int32Array | undefined = undefined;
+  let placeholderBuffer: SharedArrayBuffer | undefined = undefined;
+  let commBuf: any = undefined;
+  let commBufUint8Array: Uint8Array | undefined = undefined;
   (globalThis as any).gpu = {
     isAvailable: () => {
       return gpuAvailable;
@@ -143,54 +153,94 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
     createBuffer: (
       id: number,
       byteLength: number,
-      forWriteFromCPU: boolean,
-      forReadToCPU: boolean
     ) => {
       postToMain({
         method: 'gpu.createBuffer',
         id,
         byteLength,
-        forWriteFromCPU,
-        forReadToCPU,
       });
+    },
+    createMetaBuffer: (
+      id: number,
+      byteLength: number,
+    ) => {
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      const transferData = new Uint8Array(byteLength);
+      transferData.set(dataSrc);
+      postToMain({
+        method: 'gpu.createMetaBuffer',
+        id,
+        byteLength,
+        data: transferData
+      }, [transferData.buffer]);
     },
     disposeBuffer: (id: number) => {
       postToMain({ method: 'gpu.disposeBuffer', id });
     },
-    setData: (id: number, data: any) => {
-      const buffer = data.getBuffer();
-      data.destroy();
-      try {
-        const len = buffer.nbytes / buffer.itemsize;
-        const transferData = new Float32Array(len);
-        transferData.set(buffer.data);
-        postToMain({ method: 'gpu.setData', id, data: transferData }, [
-          transferData.buffer,
-        ]);
-      } finally {
-        buffer.release();
+    setCommBuf: (data: any) => {
+      if (commBuf) {
+        commBuf.release();
       }
-    },
-    getData: (id: number, data: any) => {
-      const buffer = data.getBuffer();
+      commBuf = data.getBuffer();
+      // data.destroy() takes relatively long time, so use the same buffer for every setData / getData.
       data.destroy();
-      try {
-        const notifyBuffer = new SharedArrayBuffer(4);
-        const notifyBufferView = new Int32Array(notifyBuffer);
+      commBufUint8Array = commBuf.data;
+    },
+    setData: (id: number, byteLength: number) => {
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      const transferData = new Uint8Array(byteLength);
+      transferData.set(dataSrc);
+      postToMain({ method: 'gpu.setData', id, data: transferData }, [
+        transferData.buffer,
+      ]);
+    },
+    getData: (id: number, byteLength: number) => {
+      if (!notifyBuffer) {
+        notifyBuffer = new SharedArrayBuffer(4);
+        notifyBufferView = new Int32Array(notifyBuffer);
         notifyBufferView[0] = 0;
-        const placeholderBuffer = new SharedArrayBuffer(buffer.nbytes);
-        const placeholderData = new Float32Array(placeholderBuffer);
+      }
+      if (!placeholderBuffer) {
+        placeholderBuffer = new SharedArrayBuffer(16 * 1024 * 1024 * 4);
+      }
+
+      if (byteLength > placeholderBuffer.byteLength) {
+        throw new Error(
+          `buffer size insufficient: ${byteLength
+          } bytes required`
+        );
+      }
+      notifyBufferView![0] = 0;
+      if (sharedBufferSent) {
+        postToMain({ method: 'gpu.getData', id });
+      } else {
         postToMain({
           method: 'gpu.getData',
           id,
-          data: placeholderData,
-          notify: notifyBufferView,
+          data: placeholderBuffer,
+          notify: notifyBuffer,
         });
-        Atomics.wait(notifyBufferView, 0, 0);
-        buffer.data.set(placeholderData);
-      } finally {
-        buffer.release();
+        sharedBufferSent = true;
       }
+
+      // if buffer[0] = 1 is written before Atomics.wait, it does not wait.
+      Atomics.wait(notifyBufferView!, 0, 0);
+
+      const placeholderData = new Uint8Array(placeholderBuffer, 0, byteLength);
+      const dataSrc = new Uint8Array(
+        commBufUint8Array!.buffer,
+        commBufUint8Array!.byteOffset,
+        byteLength
+      );
+      dataSrc.set(placeholderData);
     },
     addKernel: (
       name: string,
@@ -211,9 +261,12 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
   };
 }
 
-export async function initWorker() {
-  let initPromiseResolve: () => void = () => {
+export async function initWorker(): Promise<WgpyInitWorkerResult> {
+  let initPromiseResolve: (initResult: WgpyInitWorkerResult) => void = () => {
     throw new Error('unexpected call of initPromiseResolve');
+  };
+  let initPromiseReject: (reason: any) => void = () => {
+    throw new Error('unexpected call of initPromiseReject');
   };
   addEventListener('message', (e) => {
     if (e.data.namespace !== 'wgpy') {
@@ -221,24 +274,32 @@ export async function initWorker() {
     }
     switch (e.data.method) {
       case 'initComplete':
+        let backend: WgpyBackend | null = null;
         if (e.data.gl != null) {
+          backend = 'webgl';
           initGLInterface(true, e.data.gl);
         } else {
           initGLInterface(false, null);
         }
         if (e.data.gpu != null) {
+          backend = 'webgpu';
           initGPUInterface(true, e.data.gpu);
         } else {
           initGPUInterface(false, null);
         }
-        initPromiseResolve();
+        if (backend) {
+          initPromiseResolve({ backend });
+        } else {
+          initPromiseReject(new Error('wgpy: failed to initialize any backend'));
+        }
         break;
     }
   });
 
   postToMain({ method: 'init' });
 
-  return new Promise<void>((resolve) => {
+  return new Promise<WgpyInitWorkerResult>((resolve, reject) => {
     initPromiseResolve = resolve;
+    initPromiseReject = reject;
   });
 }

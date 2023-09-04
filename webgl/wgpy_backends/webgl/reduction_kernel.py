@@ -200,7 +200,7 @@ _{name}_t1 = _{name}_t2;
 """
     if ndim > 0:
         loop_head += f"int _{name}_0 = _{name}_t1;\n"
-        loop_head += f"""if (_{name}_0 > _{name}_shape_{0}) {{ {"return" if texture_shape.elements_per_pixel == 1 else "break"}; }}\n"""
+        loop_head += f"""if (_{name}_0 >= _{name}_shape_{0}) {{ {"return" if texture_shape.elements_per_pixel == 1 else "break"}; }}\n"""
     if texture_shape.elements_per_pixel == 4:
         loop_tail += f"""
 if (_rgba_loop == 1) {{ _{name}_vec.g = {native_texel_scalar_type}({name}); }}

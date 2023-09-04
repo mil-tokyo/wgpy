@@ -1,7 +1,6 @@
 import { nonNull } from '../util';
 import { getNNWebGPUContext, initializeNNWebGPUContext } from './webgpuContext';
 import {
-  TypedArrayTypesForWebGPUBuffer,
   WebGPUTensorBuffer,
 } from './webgpuTensorBuffer';
 
@@ -17,8 +16,13 @@ export interface ComputeContextGPUMessageCreateBuffer {
   method: 'gpu.createBuffer';
   id: number;
   byteLength: number;
-  forWriteFromCPU: boolean;
-  forReadToCPU: boolean;
+}
+
+export interface ComputeContextGPUMessageCreateMetaBuffer {
+  method: 'gpu.createMetaBuffer';
+  id: number;
+  byteLength: number;
+  data: Uint8Array;
 }
 
 export interface ComputeContextGPUMessageDisposeBuffer {
@@ -29,14 +33,14 @@ export interface ComputeContextGPUMessageDisposeBuffer {
 export interface ComputeContextGPUMessageSetData {
   method: 'gpu.setData';
   id: number;
-  data: Float32Array;
+  data: Uint8Array;
 }
 
 export interface ComputeContextGPUMessageGetData {
   method: 'gpu.getData';
   id: number;
-  data: Float32Array; // TypedArray of SharedArrayBuffer
-  notify: Int32Array; // Int32Array(1) of SharedArrayBuffer
+  data: SharedArrayBuffer; // TypedArray of SharedArrayBuffer
+  notify: SharedArrayBuffer; // Int32Array(1) of SharedArrayBuffer
 }
 
 export interface ComputeContextGPUMessageAddKernel {
@@ -53,6 +57,7 @@ export interface ComputeContextGPUMessageRunKernel {
 export type ComputeContextGPUMessage =
   | ComputeContextGPUMessageAddKernel
   | ComputeContextGPUMessageCreateBuffer
+  | ComputeContextGPUMessageCreateMetaBuffer
   | ComputeContextGPUMessageDisposeBuffer
   | ComputeContextGPUMessageGetData
   | ComputeContextGPUMessageRunKernel
@@ -67,14 +72,22 @@ export class ComputeContextGPU {
   createBuffer(
     id: number,
     byteLength: number,
-    forWriteFromCPU: boolean,
-    forReadToCPU: boolean
   ) {
     const tensorBuffer = new WebGPUTensorBuffer({
       byteLength,
-      forWriteFromCPU,
-      forReadToCPU,
-    });
+    }, false);
+    this.tensorBuffers.set(id, tensorBuffer);
+  }
+
+  createMetaBuffer(
+    id: number,
+    byteLength: number,
+    data: Uint8Array,
+  ) {
+    const tensorBuffer = new WebGPUTensorBuffer({
+      byteLength,
+    }, true);
+    tensorBuffer.setMetaBufferContent(data);
     this.tensorBuffers.set(id, tensorBuffer);
   }
 
@@ -86,7 +99,7 @@ export class ComputeContextGPU {
     }
   }
 
-  setData(id: number, data: TypedArrayTypesForWebGPUBuffer): void {
+  setData(id: number, data: Uint8Array): void {
     const tb = this.tensorBuffers.get(id);
     if (!tb) {
       return;
@@ -94,12 +107,12 @@ export class ComputeContextGPU {
     tb.setDataRaw(data);
   }
 
-  getData(id: number): Promise<Float32Array> {
+  getData(id: number): Promise<Uint8Array> {
     const tb = this.tensorBuffers.get(id);
     if (!tb) {
       return Promise.reject();
     }
-    return tb.getDataRaw('float32') as Promise<Float32Array>;
+    return tb.getDataRaw() as Promise<Uint8Array>;
   }
 
   addKernel(
@@ -122,6 +135,8 @@ export class ComputeContextGPU {
     });
   }
 
+  mdata: SharedArrayBuffer | null = null;
+  mnotify: Int32Array | null = null;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleMessage(message: ComputeContextGPUMessage, worker: Worker) {
     switch (message.method) {
@@ -132,18 +147,26 @@ export class ComputeContextGPU {
         this.createBuffer(
           message.id,
           message.byteLength,
-          message.forWriteFromCPU,
-          message.forReadToCPU
         );
+        break;
+      case 'gpu.createMetaBuffer':
+        this.createMetaBuffer(message.id, message.byteLength, message.data);
         break;
       case 'gpu.disposeBuffer':
         this.disposeBuffer(message.id);
         break;
       case 'gpu.getData':
+        if (message.data) {
+          this.mdata = message.data;
+        }
+        if (message.notify) {
+          this.mnotify = new Int32Array(message.notify);
+        }
         this.getData(message.id)
           .then((data) => {
-            message.data.set(data);
-            Atomics.notify(message.notify, 0);
+            (new Uint8Array(this.mdata!)).set(data);
+            this.mnotify![0] = 1;
+            Atomics.notify(this.mnotify!, 0);
           })
           .catch((reason) => {
             console.error(reason);

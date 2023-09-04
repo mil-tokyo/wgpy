@@ -1,85 +1,65 @@
-import { DType, TypedArrayConstructor } from '../dtype';
 import { getNNWebGPUContext } from './webgpuContext';
 
 let webgpuAllocCount = 0;
 export const existingBuffers: Set<WebGPUTensorBuffer> = new Set();
 
-export type TypedArrayTypesForWebGPUBuffer = Float32Array | Int32Array | Uint32Array;
-
 export interface WebGPUBufferShape {
   byteLength: number;
-  forWriteFromCPU: boolean;
-  forReadToCPU: boolean;
 }
 
 export class WebGPUTensorBuffer {
-  public ref: number;
   gpuBuffer: GPUBuffer;
 
-  private mappedForWriteFromCPU: boolean;
+  // private mappedForWriteFromCPU: boolean;
 
-  constructor(public readonly bufferShape: WebGPUBufferShape) {
+  constructor(public readonly bufferShape: WebGPUBufferShape, public readonly forMetaBuffer: boolean) {
     const ctx = getNNWebGPUContext();
-    this.ref = 1;
-    let usage = GPUBufferUsage.STORAGE;
-    if (bufferShape.forReadToCPU) {
-      usage |= GPUBufferUsage.COPY_SRC;
-    }
+    const usage = forMetaBuffer ?  GPUBufferUsage.STORAGE : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST;
+    // if (bufferShape.forReadToCPU) {
+    //   usage |= GPUBufferUsage.COPY_SRC;
+    // }
     this.gpuBuffer = ctx.device.createBuffer({
-      mappedAtCreation: bufferShape.forWriteFromCPU,
+      mappedAtCreation: forMetaBuffer, //bufferShape.forWriteFromCPU,
       size: bufferShape.byteLength,
       usage,
     });
-    this.mappedForWriteFromCPU = bufferShape.forWriteFromCPU;
+    // this.mappedForWriteFromCPU = bufferShape.forWriteFromCPU;
     webgpuAllocCount++;
     existingBuffers.add(this);
   }
 
-  setDataRaw(data: TypedArrayTypesForWebGPUBuffer): void {
-    if (!this.mappedForWriteFromCPU) {
-      // TODO: enable write again by creating temporary buffer and copybuffertobuffer
-      throw new Error(
-        'The buffer is not mapped. WebGPUTensor can only be written just after creation.'
-      );
-    }
-
+  setMetaBufferContent(data: Uint8Array): void {
     const ab = this.gpuBuffer.getMappedRange();
-    // create same typedarray as data
-    const mappedArray = new (data.constructor as TypedArrayConstructor)(ab);
+    const mappedArray = new Uint8Array(ab);
     mappedArray.set(data);
     this.gpuBuffer.unmap();
-    this.mappedForWriteFromCPU = false;
   }
 
-  async getDataRaw(dtype: DType): Promise<TypedArrayTypesForWebGPUBuffer> {
-    if (!this.bufferShape.forReadToCPU) {
-      throw new Error(
-        'forReadToCPU flag is not set for this WebGPUTensor. Please use WebGPUTensor.copy() to create readable tensor.'
-      );
-    }
+  setDataRaw(data: Uint8Array): void {
     const ctx = getNNWebGPUContext();
-    let ctor: typeof Float32Array | typeof Int32Array | typeof Uint32Array;
-    let itemCount: number;
-    switch (dtype) {
-      case 'float32':
-        ctor = Float32Array;
-        itemCount = this.bufferShape.byteLength / ctor.BYTES_PER_ELEMENT;
-        break;
-      case 'int32':
-        ctor = Int32Array;
-        itemCount = this.bufferShape.byteLength / ctor.BYTES_PER_ELEMENT;
-        break;
-      case 'uint8':
-      case 'bool':
-        // Stored in Uint32Array instead of Uint8Array
-        ctor = Uint32Array;
-        itemCount = this.bufferShape.byteLength / ctor.BYTES_PER_ELEMENT;
-        break;
-      default:
-        throw new Error(`Unknown dtype ${dtype}`);
-    }
+    const copySrcBuffer = ctx.device.createBuffer({
+      mappedAtCreation: true, // by using this option, async is not needed
+      size: this.gpuBuffer.size,
+      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE,
+    });
 
-    const data: TypedArrayTypesForWebGPUBuffer = new ctor(itemCount),
+    const ab = copySrcBuffer.getMappedRange();
+    const mappedArray = new Uint8Array(ab);
+    mappedArray.set(data);
+    copySrcBuffer.unmap();
+
+    const commandEncoder = ctx.device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(copySrcBuffer, 0, this.gpuBuffer, 0, this.gpuBuffer.size);
+
+    ctx.device.queue.submit([commandEncoder.finish()]);
+
+    copySrcBuffer.destroy();
+  }
+
+  async getDataRaw(): Promise<Uint8Array> {
+    const ctx = getNNWebGPUContext();
+
+    const data = new Uint8Array(this.bufferShape.byteLength),
       dst = ctx.device.createBuffer({
         size: this.bufferShape.byteLength,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
@@ -95,7 +75,7 @@ export class WebGPUTensorBuffer {
     ctx.device.queue.submit([commandEncoder.finish()]);
     await dst.mapAsync(GPUMapMode.READ);
     const arrayBuffer = dst.getMappedRange(),
-      buffer_mapped_array = new ctor(arrayBuffer, 0, itemCount);
+      buffer_mapped_array = new Uint8Array(arrayBuffer, 0, this.bufferShape.byteLength);
     data.set(buffer_mapped_array);
     dst.unmap();
     dst.destroy();

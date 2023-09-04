@@ -1,0 +1,2 @@
+from cupy_backends.runtime.mock_elementwise_kernel import mock_elementwise_kernel
+from cupy_backends.runtime.mock_reduction_kernel import mock_reduction_kernel

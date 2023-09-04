@@ -1,8 +1,5 @@
-import math
-import pytest
 import numpy as np
 import wgpy as cp
-from wgpy_backends.webgl.texture import WebGLArrayTextureShape, WebGL2RenderingContext, enqueue_default_texture_shape
 
 def allclose(expected, actual):
     np.testing.assert_allclose(expected, actual, rtol=1e-2, atol=1e-2)
