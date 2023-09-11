@@ -27,6 +27,7 @@ async function start(backend, testPath) {
   });
   await pyodide.loadPackage('micropip');
   await pyodide.loadPackage('numpy');
+  await pyodide.loadPackage('scipy');
   await pyodide.loadPackage('pytest');
   await pyodide.loadPackage(`/dist/wgpy_${backend}-1.0.0-py3-none-any.whl`);
   await pyodide.loadPackage('/dist/wgpy_test-1.0.0-py3-none-any.whl');
