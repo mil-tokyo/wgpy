@@ -11,18 +11,7 @@ async function run() {
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
-  const options = {};
-  switch (backend) {
-    case 'webgl':
-      options.gl = true;
-      break;
-    case 'webgpu':
-      options.gpu = true;
-      break;
-    default:
-      throw new Error(`Unknown backend ${backend}`);
-  }
-  await wgpy.initMain(worker, options);
+  await wgpy.initMain(worker, { backendOrder: [backend] });
 
   worker.addEventListener('message', (e) => {
     if (e.data.namespace !== 'app') {
