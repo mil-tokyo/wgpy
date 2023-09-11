@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPU computing with Python on web browser sample</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Black-Scholes benchmark on web browser</h1>
+    <div>
+      Backend:
+      <label><input type="radio" name="backend" value="webgpu" checked />WebGPU</label>
+      <label><input type="radio" name="backend" value="webgl" />WebGL</label>
+      <label><input type="radio" name="backend" value="cpu" />CPU</label>
+    </div>
+    <div>
+      Number of samples:
+      <input type="radio" name="samples" id="samples1000" value="1000" /><label for="samples1000">1k</label>
+      <input type="radio" name="samples" id="samples1000000" value="1000000" checked /><label for="samples1000000">1M</label>
+      <input type="radio" name="samples" id="samples10000000" value="10000000" /><label for="samples10000000">10M</label>
+    </div>
+    <div>
+      Mode:
+      <input type="radio" name="mode" id="modeBenchmark" value="benchmark" checked /><label for="modeBenchmark">benchmark</label>
+      <input type="radio" name="mode" id="modeVerify" value="verify" /><label for="modeVerify">verify result between CPU and GPU</label>
+    </div>
+    <button type="button" id="run">Run</button>
+    <p>For GPU computing, time to transferring matrix content between CPU and GPU are inclueded.</p>
+    <div id="log"></div>
+  </body>
+</html>
