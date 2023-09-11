@@ -11,10 +11,11 @@ function getConfig() {
   if (!use_gpu) {
     backend = 'webgl';
   }
+  const kernel_type = document.querySelector('input[name="kerneltype"]:checked').value;
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const samples = Number(document.querySelector('input[name="samples"]:checked').value);
 
-  return { backend, use_gpu, mode, samples };
+  return { backend, use_gpu, kernel_type, mode, samples };
 }
 
 async function run() {
