@@ -3,6 +3,9 @@ import numpy as np
 from js import gl # Pyodide-dependent
 
 class WebGLPlatform:
+    def __init__(self) -> None:
+        self._latest_comm_buf = None
+
     def getDeviceInfo(self) -> dict:
         return gl.getDeviceInfo().to_py()
 
@@ -13,13 +16,22 @@ class WebGLPlatform:
         return gl.disposeBuffer(buffer_id)
     
     def setCommBuf(self, buffer: np.ndarray):
+        self._latest_comm_buf = buffer
         return gl.setCommBuf(buffer)
     
     def setData(self, buffer_id: int, js_ctor_type: str, size: int):
-        return gl.setData(buffer_id, js_ctor_type, size)
+        if not gl.setData(buffer_id, js_ctor_type, size):
+            # WASM buffer may reallocated
+            self.setCommBuf(self._latest_comm_buf)
+            if not gl.setData(buffer_id, js_ctor_type, size):
+                raise ValueError("setData failed twice")
 
     def getData(self, buffer_id: int, js_ctor_type: str, size: int):
-        return gl.getData(buffer_id, js_ctor_type, size)
+        if not gl.getData(buffer_id, js_ctor_type, size):
+            # WASM buffer may reallocated
+            self.setCommBuf(self._latest_comm_buf)
+            if not gl.getData(buffer_id, js_ctor_type, size):
+                raise ValueError("getData failed twice")
 
     def addKernel(self, name, descriptor):
         return gl.addKernel(name, descriptor)

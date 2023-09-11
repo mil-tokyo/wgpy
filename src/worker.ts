@@ -63,16 +63,23 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
         throw new Error('ctorType unknown ' + ctorType);
       }
 
-      const dataSrc = new ctor(
-        commBufUint8Array!.buffer,
-        commBufUint8Array!.byteOffset,
-        size
-      );
+      let dataSrc: Float32Array | Int32Array | Uint16Array | Uint8Array;
+      try {
+        // same as setData
+        dataSrc = new ctor(
+          commBufUint8Array!.buffer,
+          commBufUint8Array!.byteOffset,
+          size
+        );
+      } catch (e) {
+        return false;
+      }
       const transferData = new ctor(size);
       transferData.set(dataSrc);
       postToMain({ method: 'gl.setData', id, data: transferData }, [
         transferData.buffer,
       ]);
+      return true;
     },
     getData: (id: number, ctorType: string, size: number) => {
       const ctor = {
@@ -83,6 +90,17 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
       }[ctorType];
       if (!ctor) {
         throw new Error('ctorType unknown ' + ctorType);
+      }
+      let dataSrc: Float32Array | Int32Array | Uint16Array | Uint8Array;
+      try {
+        // same as setData
+        dataSrc = new ctor(
+          commBufUint8Array!.buffer,
+          commBufUint8Array!.byteOffset,
+          size
+        );
+      } catch (e) {
+        return false;
       }
       if (!notifyBuffer) {
         notifyBuffer = new SharedArrayBuffer(4);
@@ -116,12 +134,8 @@ function initGLInterface(glAvailable: boolean, glDeviceInfo: any) {
       Atomics.wait(notifyBufferView!, 0, 0);
 
       const placeholderData = new ctor(placeholderBuffer, 0, size);
-      const dataSrc = new ctor(
-        commBufUint8Array!.buffer,
-        commBufUint8Array!.byteOffset,
-        size
-      );
       dataSrc.set(placeholderData);
+      return true;
     },
     addKernel: (name: string, descriptor: { source: string }) => {
       postToMain({
@@ -191,18 +205,37 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
       commBufUint8Array = commBuf.data;
     },
     setData: (id: number, byteLength: number) => {
-      const dataSrc = new Uint8Array(
-        commBufUint8Array!.buffer,
-        commBufUint8Array!.byteOffset,
-        byteLength
-      );
+      // When wasm buffer is reallocated, commBufUint8Array is detached.
+      // 'TypeError: Cannot perform Construct on a detached ArrayBuffer' is thrown.
+      let dataSrc: Uint8Array;
+      try {
+        dataSrc = new Uint8Array(
+          commBufUint8Array!.buffer,
+          commBufUint8Array!.byteOffset,
+          byteLength
+        );
+      } catch (e) {
+        return false;
+      }
       const transferData = new Uint8Array(byteLength);
       transferData.set(dataSrc);
       postToMain({ method: 'gpu.setData', id, data: transferData }, [
         transferData.buffer,
       ]);
+      return true;
     },
     getData: (id: number, byteLength: number) => {
+      let dataSrc: Uint8Array;
+      try {
+        // same as setData
+        dataSrc = new Uint8Array(
+          commBufUint8Array!.buffer,
+          commBufUint8Array!.byteOffset,
+          byteLength
+        );
+      } catch (e) {
+        return false;
+      }
       if (!notifyBuffer) {
         notifyBuffer = new SharedArrayBuffer(4);
         notifyBufferView = new Int32Array(notifyBuffer);
@@ -235,12 +268,8 @@ function initGPUInterface(gpuAvailable: boolean, gpuDeviceInfo: any) {
       Atomics.wait(notifyBufferView!, 0, 0);
 
       const placeholderData = new Uint8Array(placeholderBuffer, 0, byteLength);
-      const dataSrc = new Uint8Array(
-        commBufUint8Array!.buffer,
-        commBufUint8Array!.byteOffset,
-        byteLength
-      );
       dataSrc.set(placeholderData);
+      return true;
     },
     addKernel: (
       name: string,

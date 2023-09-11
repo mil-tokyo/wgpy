@@ -3,6 +3,9 @@ import numpy as np
 from js import gpu # Pyodide-dependent
 
 class WebGPUPlatform:
+    def __init__(self) -> None:
+        self._latest_comm_buf = None
+
     def getDeviceInfo(self) -> dict:
         return gpu.getDeviceInfo().to_py()
 
@@ -16,13 +19,21 @@ class WebGPUPlatform:
         return gpu.disposeBuffer(buffer_id)
     
     def setCommBuf(self, buffer: np.ndarray):
+        self._latest_comm_buf = buffer
         return gpu.setCommBuf(buffer)
     
     def setData(self, buffer_id: int, byte_length: int):
-        return gpu.setData(buffer_id, byte_length)
+        if not gpu.setData(buffer_id, byte_length):
+            # WASM buffer may reallocated
+            self.setCommBuf(self._latest_comm_buf)
+            if not gpu.setData(buffer_id, byte_length):
+                raise ValueError("setData failed twice")
 
     def getData(self, buffer_id: int, byte_length: int):
-        return gpu.getData(buffer_id, byte_length)
+        if not gpu.getData(buffer_id, byte_length):
+            self.setCommBuf(self._latest_comm_buf)
+            if not gpu.getData(buffer_id, byte_length):
+                raise ValueError("getData failed twice")
 
     def addKernel(self, name, descriptor):
         return gpu.addKernel(name, descriptor)
