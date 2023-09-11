@@ -360,7 +360,8 @@ a = ({self.reduce_expr});
         # broadcasting
         target_shapes = []
         for i, array in enumerate(arrays):
-            if array is None:
+            if array is None or not hasattr(array, 'shape'):
+                # hasattr: array may be scalar
                 continue
             if i < len(self.parsed_in_params):
                 pip = self.parsed_in_params[i]
