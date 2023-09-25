@@ -20,8 +20,32 @@
       <label><input type="checkbox" id="webgpu" value="webgpu" checked />WebGPU</label>
       <label><input type="checkbox" id="webgl" value="webgl" checked />WebGL</label>
       <p>
-        If both are checked, WebGPU is first tried. If the browser does not support it, WebGL is tried.
+        If both are checked, WebGPU is first tried. If the browser does not support it, WebGL is tried. If nothing is checked, CPU (numpy) is used.
       </p>
+    </div>
+
+    <div>
+      Times of multiplications: <input type="number" id="times" value="1" />
+      <pre>
+      <code>
+# Timer starts here
+if use_gpu:
+    mat_a = cp.asarray(mat_a)
+    mat_b = cp.asarray(mat_b)
+mat_c = None
+for _ in range(times):
+    if mat_c is None:
+        mat_c = mat_a @ mat_b
+    else:
+        mat_c += mat_c @ mat_b
+if use_gpu:
+    mat_c = cp.asnumpy(mat_c)
+# Timer stops here
+      </code>
+    </pre>
+    </div>
+    <div>
+      <label><input type="checkbox" id="compare-result" value="1" checked />Compare result with CPU</label>
     </div>
     <div>
       Sizes: list of triplets of m, n, k where m×k matrix times k×n matrix are computed.<br>

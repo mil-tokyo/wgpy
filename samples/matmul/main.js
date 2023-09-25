@@ -12,9 +12,10 @@ function getConfig() {
       backendOrder.push(backend);
     }
   }
-  const sizesElem = document.getElementById('sizes');
-  const sizes = sizesElem.value;
-  return { backendOrder, sizes };
+  const sizes = document.getElementById('sizes').value;
+  const compareResult = document.getElementById('compare-result').checked;
+  const times = Number(document.getElementById('times').value);
+  return { backendOrder, sizes, compareResult, times };
 }
 
 async function run() {

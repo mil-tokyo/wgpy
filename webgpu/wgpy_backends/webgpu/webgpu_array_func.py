@@ -1,10 +1,8 @@
-import math
 from typing import List, Optional, Tuple, Union
 from wgpy_backends.webgpu import common_reduction
 from wgpy_backends.webgpu import common_ufunc
-from wgpy_backends.webgpu.webgpu_buffer import create_meta_buffer_from_structure
-from wgpy_backends.webgpu.platform import get_platform
 from wgpy_backends.webgpu.ndarray import ndarray
+from wgpy_backends.webgpu.matmul import matmul_impl
 
 added_kernels = set()
 elementwise_kernels = {}
@@ -25,78 +23,7 @@ class WebGPUArrayFunc:
         return WebGPUArrayFunc._instance
 
     def matmul(self, lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> ndarray:
-        # 2D only
-        # TODO: accelerate in special case (such as k is multiple of 4)
-        m, k = lhs.shape
-        k2, n = rhs.shape
-        assert k == k2
-        kernel_name = f'matmul'
-        if kernel_name not in added_kernels:
-            get_platform().addKernel(kernel_name, {'source': """@group(0) @binding(0)
-var<storage,read> array_a: array<f32>;
-
-@group(0) @binding(1)
-var<storage,read> array_b: array<f32>;
-
-@group(0) @binding(2)
-var<storage,read_write> array_c: array<f32>;
-
-struct CMeta {
-  M: u32,
-  N: u32,
-  K: u32,
-  LHS_OFFSET: u32,
-  LHS_STRIDE_0: u32,
-  LHS_STRIDE_1: u32,
-  RHS_OFFSET: u32,
-  RHS_STRIDE_0: u32,
-  RHS_STRIDE_1: u32,
-  alpha: f32,
-}
-
-@group(0) @binding(3)
-var<storage,read> cmeta: CMeta;
-
-@compute @workgroup_size(8,8,1)
-fn main(
-  @builtin(global_invocation_id) global_id: vec3<u32>
-) {
-  var M: u32 = cmeta.M;
-  var N: u32 = cmeta.N;
-  var K: u32 = cmeta.K;
-  var LHS_OFFSET: u32 = cmeta.LHS_OFFSET;
-  var LHS_STRIDE_0: u32 = cmeta.LHS_STRIDE_0;
-  var LHS_STRIDE_1: u32 = cmeta.LHS_STRIDE_1;
-  var RHS_OFFSET: u32 = cmeta.RHS_OFFSET;
-  var RHS_STRIDE_0: u32 = cmeta.RHS_STRIDE_0;
-  var RHS_STRIDE_1: u32 = cmeta.RHS_STRIDE_1;
-  var x: u32 = global_id.x;
-  var y: u32 = global_id.y;
-  if (x >= N || y >= M) {
-    return;
-  }
-  var sum: f32 = 0.0;
-  for(var k: u32 = 0u; k < K; k = k + 1u) {
-    sum = array_a[LHS_OFFSET + y * LHS_STRIDE_0 + k * LHS_STRIDE_1] * array_b[RHS_OFFSET + k * RHS_STRIDE_0 + x * RHS_STRIDE_1] + sum;
-  }
-  array_c[x + y * N] = sum * cmeta.alpha;
-}
-    """,
-                'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
-            added_kernels.add(kernel_name)
-        meta = create_meta_buffer_from_structure((m, n, k, lhs.offset // lhs.itemsize, lhs.strides[0] // lhs.itemsize, lhs.strides[1] // lhs.itemsize, rhs.offset // rhs.itemsize, rhs.strides[0] // rhs.itemsize, rhs.strides[1] // rhs.itemsize, 1.0), 'u4,u4,u4,u4,u4,u4,u4,u4,u4,f4')
-        if out is None:
-            out = ndarray((m, n), lhs.dtype)
-        else:
-            assert out.flags.c_contiguous_full
-
-        get_platform().runKernel({
-            'name': kernel_name,
-            'tensors': [lhs.buffer.buffer_id, rhs.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-            'workGroups': {'x': int(math.ceil(n/8)), 'y': int(math.ceil(m/8)), 'z': 1},
-        })
-
-        return out
+        return matmul_impl(lhs, rhs, out)
 
     def _unify_tensordot_axis(self, ndims: Tuple[int, int], axes: Union[int, Tuple[int, int], Tuple[List[int], List[int]]]) -> Tuple[List[int], List[int]]:
         if isinstance(axes, int):
