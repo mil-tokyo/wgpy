@@ -116,5 +116,13 @@ trainer.extend(extensions.PrintReport(['epoch', 'iteration', 'main/loss', 'main/
 #trainer.extend(extensions.PlotReport(['main/accuracy', 'validation/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
 
 trainer.run()
-import wgpy_backends.webgl
-print(wgpy_backends.webgl.get_performance_metrics())
+try:
+    import wgpy_backends.webgl
+    print(wgpy_backends.webgl.get_performance_metrics())
+except:
+    pass
+try:
+    import wgpy_backends.webgpu
+    print(wgpy_backends.webgpu.get_performance_metrics())
+except:
+    pass
