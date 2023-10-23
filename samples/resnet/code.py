@@ -14,8 +14,6 @@ import numpy as np
 import chainer
 from chainer import training
 from chainer import iterators, optimizers
-from chainer import Chain
-import chainer.functions as F
 import chainer.links as L
 from chainer.training import extensions
 chainer.print_runtime_info()
