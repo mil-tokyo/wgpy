@@ -4,24 +4,24 @@
 
 import micropip
 await micropip.install('/lib/chainer-5.4.0-py3-none-any.whl')
+await micropip.install('/samples/resnet/dist/resnet-0.0.1-py3-none-any.whl')
 from pyodide.http import pyfetch
-response = await pyfetch('/lib/mnist.zip') # mnist.zip contains train.npz, test.npz
-await response.unpack_archive(extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/mnist", format="zip")
+response = await pyfetch('/lib/cifar100.zip') # mnist.zip contains train.npz, test.npz
+await response.unpack_archive(extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/cifar", format="zip")
 
 from js import pythonIO
 import numpy as np
 import chainer
 from chainer import training
 from chainer import iterators, optimizers
-from chainer import Chain
-import chainer.functions as F
 import chainer.links as L
 from chainer.training import extensions
 chainer.print_runtime_info()
+from resnet import ResNet18
 
-from chainer.datasets import mnist
+from chainer.datasets import get_cifar100
 
-train, test = mnist.get_mnist(ndim=3)
+train, test = get_cifar100()
 
 batchsize = int(pythonIO.config.batchSize)
 
@@ -42,45 +42,8 @@ train_iter = iterators.SerialIterator(train, batchsize)
 test, _ = split_dataset_random(test, 1000, seed=0)
 test_iter = iterators.SerialIterator(test, batchsize, False, False)
 
-class MLP(Chain):
-    def __init__(self, n_mid_units=100, n_out=10):
-        super(MLP, self).__init__()
-        with self.init_scope():
-            self.l1 = L.Linear(None, n_mid_units)
-            self.l2 = L.Linear(None, n_mid_units)
-            self.l3 = L.Linear(None, n_out)
 
-    def forward(self, x):
-        h1 = F.relu(self.l1(x))
-        h2 = F.relu(self.l2(h1))
-        return self.l3(h2)
-
-class CNN(Chain):
-    def __init__(self, ch=64, n_out=10):
-        super().__init__()
-        with self.init_scope():
-            self.conv1 = L.Convolution2D(1, ch, ksize=3, stride=1, pad=1)
-            self.bn1 = L.BatchNormalization(ch)
-            self.conv2 = L.Convolution2D(ch, ch, ksize=3, stride=1, pad=1)
-            self.bn2 = L.BatchNormalization(ch)
-            self.conv3 = L.Convolution2D(ch, ch, ksize=3, stride=1, pad=1)
-            self.bn3 = L.BatchNormalization(ch)
-            self.linear = L.Linear(None, n_out)
-    
-    def forward(self, x):
-        h = x
-        h = F.relu(self.bn1(self.conv1(h)))
-        h = F.max_pooling_2d(h, ksize=2)
-        h = F.relu(self.bn2(self.conv2(h)))
-        h = F.max_pooling_2d(h, ksize=2)
-        h = F.relu(self.bn3(self.conv3(h)))
-        #h = F.max_pooling_2d(h, ksize=2)
-        h = F.average_pooling_2d(h, 7, stride=1)
-        h = self.linear(h)
-        return h
-
-
-model = {"MLP": MLP, "CNN": CNN}[pythonIO.config.model]()
+model = ResNet18()
 
 if gpu_id >= 0:
     model.to_gpu(gpu_id)

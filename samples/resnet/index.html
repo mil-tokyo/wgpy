@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPU computing with Python on web browser sample</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ResNet-18 for CIFAR-100 training on web browser</h1>
+    <div>
+      Backends to try:
+      <label><input type="checkbox" id="webgpu" value="webgpu" checked />WebGPU</label>
+      <label><input type="checkbox" id="webgl" value="webgl" checked />WebGL</label>
+      <p>
+        If both are checked, WebGPU is first tried. If the browser does not support it, WebGL is tried.
+      </p>
+    </div>
+    <div>
+      Batch size:
+      <input type="number" name="batchSize" value="4"/>
+    </div>
+    <button type="button" id="run">Run</button>
+    <div id="log"></div>
+  </body>
+</html>

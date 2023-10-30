@@ -108,3 +108,20 @@ python scripts/pack_mnist.py
 ```
 
 `lib/mnist.zip` is generated.
+
+
+## Download and preprocess CIFAR-100 dataset
+
+Chainer 5.4.0 is needed.
+
+```
+pip install chainer==5.4.0
+```
+
+Run:
+
+```
+python scripts/pack_cifar100.py
+```
+
+`lib/cifar100.zip` is generated.
