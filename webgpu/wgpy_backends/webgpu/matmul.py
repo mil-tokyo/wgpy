@@ -243,7 +243,9 @@ def _tensordot_convforward(a: ndarray, b: ndarray) -> ndarray:
     oc, _, _, _ = b.shape
     ckhkw = c * kh * kw
     hw = h * w
-    kernel_key = ('tensordot_cf',)
+    hw_is_mul_32 = hw % 32 == 0
+    oc_is_mul_32 = oc % 32 == 0
+    kernel_key = ('tensordot_cf', hw_is_mul_32, oc_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
@@ -272,7 +274,7 @@ cst2: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-@compute @workgroup_size(1,1,1)
+""" f"@compute @workgroup_size(1,{8 if hw_is_mul_32 else 1},{8 if oc_is_mul_32 else 1})" """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -318,7 +320,7 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
     get_platform().runKernel({
         'name': kernel_name,
         'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(n), 'y': int(hw//4), 'z': int(oc // 4)},
+        'workGroups': {'x': int(n), 'y': int(hw // 32 if hw_is_mul_32 else hw // 4), 'z': int(oc // 32 if oc_is_mul_32 else oc // 4)},
     })
 
     return out
@@ -349,7 +351,9 @@ def _tensordot_convbackwardinput(a: ndarray, b: ndarray) -> ndarray:
     n, _, h, w = b.shape
     ckhkw = c * kh * kw
     hw = h * w
-    kernel_key = ('tensordot_cbi',)
+    ckhkw_is_mul_32 = ckhkw % 32 == 0
+    hw_is_mul_32 = hw % 32 == 0
+    kernel_key = ('tensordot_cbi', ckhkw_is_mul_32, hw_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
@@ -378,7 +382,7 @@ cst2: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-@compute @workgroup_size(1,1,1)
+""" f"@compute @workgroup_size({8 if ckhkw_is_mul_32 else 1},1,{8 if hw_is_mul_32 else 1})" """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -424,7 +428,7 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
     get_platform().runKernel({
         'name': kernel_name,
         'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(ckhkw // 4), 'y': int(n), 'z': int(hw // 4)},
+        'workGroups': {'x': int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4), 'y': int(n), 'z': int(hw // 32 if hw_is_mul_32 else hw // 4)},
     })
 
     return out
@@ -456,7 +460,9 @@ def _tensordot_convbackwardweight(a: ndarray, b: ndarray) -> ndarray:
     _, c, kh, kw, _, _ = b.shape
     ckhkw = c * kh * kw
     hw = h * w
-    kernel_key = ('tensordot_cbw',)
+    oc_is_mul_32 = oc % 32 == 0
+    ckhkw_is_mul_32 = ckhkw % 32 == 0
+    kernel_key = ('tensordot_cbw', oc_is_mul_32, ckhkw_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
@@ -486,7 +492,7 @@ cst1: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-@compute @workgroup_size(1,1,1)
+""" f"@compute @workgroup_size({8 if oc_is_mul_32 else 1},{8 if ckhkw_is_mul_32 else 1},1)" """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -535,7 +541,7 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
     get_platform().runKernel({
         'name': kernel_name,
         'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(oc // 4), 'y': int(ckhkw // 4), 'z': 1},
+        'workGroups': {'x': int(oc // 32 if oc_is_mul_32 else oc // 4), 'y': int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4), 'z': 1},
     })
 
     return out
