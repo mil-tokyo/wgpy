@@ -4,7 +4,7 @@ wgpy is a WebGL accelerated numpy-compatible array library for web browsers. It 
 
 # Setup Environment
 
-Python 3.10 and Node.js 16 are required.
+Python 3.11 and Node.js 16 are required.
 
 ## Downloading Pyodide
 
