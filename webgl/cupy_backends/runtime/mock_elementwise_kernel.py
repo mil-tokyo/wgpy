@@ -442,7 +442,7 @@ def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None
     elif elementwise_kernel.name == 'bn_bwd':
         return bn_bwd(elementwise_kernel, args)
     else:
-        msg = f"""Requested reduction kernel is not implemented in WebGL.
+        msg = f"""Requested elementwise kernel is not implemented in WebGL.
 {repr({'in_params': elementwise_kernel.in_params, 'out_params': elementwise_kernel.out_params, 'operation': elementwise_kernel.operation, 'name': elementwise_kernel.name, 'reduce_dims': elementwise_kernel.reduce_dims, 'preamble': elementwise_kernel.preamble, 'no_return': elementwise_kernel.no_return, 'return_tuple': elementwise_kernel.return_tuple, 'loop_prep': elementwise_kernel.loop_prep, 'after_loop': elementwise_kernel.after_loop})}
 arguments:
 """
