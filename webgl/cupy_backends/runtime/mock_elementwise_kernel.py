@@ -418,6 +418,33 @@ def bn_bwd(elementwise_kernel, args):
     y = bn_bwd_kernel(*args)
     return y
 
+sigmoid_fwd_kernel = None
+def sigmoid_fwd(elementwise_kernel, args):
+    global sigmoid_fwd_kernel
+    if sigmoid_fwd_kernel is None:
+        # Chainer's implementation uses tanh(x * 0.5) * 0.5 + 0.5, but tanh produces NaN for large x in some GPU, so we avoid using it.
+        sigmoid_fwd_kernel = ElementwiseKernel(
+            in_params='T x',
+            out_params='T y',
+            operation='y = 1.0 / (1.0 + exp(-x))',
+            name='sigmoid_fwd'
+        )
+    y = sigmoid_fwd_kernel(*args)
+    return y
+
+sigmoid_bwd_kernel = None
+def sigmoid_bwd(elementwise_kernel, args):
+    global sigmoid_bwd_kernel
+    if sigmoid_bwd_kernel is None:
+        sigmoid_bwd_kernel = ElementwiseKernel(
+            in_params='T y, T gy',
+            out_params='T gx',
+            operation='gx = gy * y * (1.0 - y)',
+            name='sigmoid_bwd'
+        )
+    y = sigmoid_bwd_kernel(*args)
+    return y
+
 def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None):
     if elementwise_kernel.name == 'softmax_crossent_bwd':
         return softmax_crossent_bwd(elementwise_kernel, args)
@@ -441,6 +468,10 @@ def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None
         return bn_fwd(elementwise_kernel, args)
     elif elementwise_kernel.name == 'bn_bwd':
         return bn_bwd(elementwise_kernel, args)
+    elif elementwise_kernel.name == 'sigmoid_fwd':
+        return sigmoid_fwd(elementwise_kernel, args)
+    elif elementwise_kernel.name == 'sigmoid_bwd':
+        return sigmoid_bwd(elementwise_kernel, args)
     else:
         msg = f"""Requested elementwise kernel is not implemented in WebGL.
 {repr({'in_params': elementwise_kernel.in_params, 'out_params': elementwise_kernel.out_params, 'operation': elementwise_kernel.operation, 'name': elementwise_kernel.name, 'reduce_dims': elementwise_kernel.reduce_dims, 'preamble': elementwise_kernel.preamble, 'no_return': elementwise_kernel.no_return, 'return_tuple': elementwise_kernel.return_tuple, 'loop_prep': elementwise_kernel.loop_prep, 'after_loop': elementwise_kernel.after_loop})}

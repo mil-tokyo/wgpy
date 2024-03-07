@@ -14,10 +14,13 @@ def setup_teardown():
     np.random.seed(1)
     yield    
 
-def forward_backward_link(link, input_shape, link_attrs, forward_only=False):
+def forward_backward_link(link, input_shape_or_array, link_attrs, forward_only=False):
     link.cleargrads()
 
-    data = np.random.randn(*input_shape).astype(np.float32)
+    if isinstance(input_shape_or_array, tuple):
+        data = np.random.randn(*input_shape_or_array).astype(np.float32)
+    else:
+        data = input_shape_or_array
     data_cpu = chainer.Variable(data)
     out_cpu = link(data_cpu)
     if not forward_only:
@@ -53,6 +56,8 @@ def test_linear():
 def test_relu():
     forward_backward_link(Sequential(F.relu), (2, 8), [])
 
+def test_sigmoid():
+    forward_backward_link(Sequential(F.sigmoid), np.array([0.0, 0.5, 1.0, 100.0, -100.0], dtype=np.float32), [])
 
 def test_batch_normalization():
     input_shape = (10, 3, 7, 8)
