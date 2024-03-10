@@ -5,20 +5,23 @@ from wgpy.common.shape_util import args_to_tuple_of_int
 
 
 def _get_ap(x):
-    return getattr(x, '__array_priority__', 0)
+    return getattr(x, "__array_priority__", 0)
+
 
 def _use_rhs(lhs, rhs):
     return _get_ap(lhs) < _get_ap(rhs)
 
-A = TypeVar('A', bound='NDArrayBase')
 
-class NDArrayBase():
-    __array_priority__ = 100 # dezero Variable is 200
+A = TypeVar("A", bound="NDArrayBase")
+
+
+class NDArrayBase:
+    __array_priority__ = 100  # dezero Variable is 200
     shape: Tuple[int, ...]
     dtype: np.dtype
-    strides: Tuple[int, ...] # unit: byte
+    strides: Tuple[int, ...]  # unit: byte
     itemsize: int
-    offset: int # byte offset from buffer head
+    offset: int  # byte offset from buffer head
     nbytes: int
 
     def _binary_lhs(self, other, func, rhs):
@@ -37,7 +40,9 @@ class NDArrayBase():
         return self._binary_lhs(other, self.array_func.ufunc.mul, lambda o: o.__rmul__)
 
     def __truediv__(self, other):
-        return self._binary_lhs(other, self.array_func.ufunc.truediv, lambda o: o.__rmul__)
+        return self._binary_lhs(
+            other, self.array_func.ufunc.truediv, lambda o: o.__rmul__
+        )
 
     def __pow__(self, other):
         return self._binary_lhs(other, self.array_func.ufunc.pow, lambda o: o.__rmul__)
@@ -62,7 +67,7 @@ class NDArrayBase():
 
     def __matmul__(self, other):
         return self.array_func.matmul(self, other)
-    
+
     # TODO: floordiv, mod, divmod, lshift, rshift, and, xor, or
 
     def __radd__(self, other):
@@ -107,7 +112,7 @@ class NDArrayBase():
 
     def __neg__(self):
         return self.array_func.ufunc.neg(self)
-    
+
     def __abs__(self):
         return self.array_func.ufunc.abs(self)
 
@@ -118,7 +123,7 @@ class NDArrayBase():
         if self.size != 1:
             raise TypeError("only size-1 arrays can be converted to Python scalars")
         return float(self.get())
-    
+
     def __int__(self):
         if self.size != 1:
             raise TypeError("only size-1 arrays can be converted to Python scalars")
@@ -128,16 +133,16 @@ class NDArrayBase():
         if self.ndim > 0:
             return self.shape[0]
         else:
-            raise TypeError('len() of unsized object')
+            raise TypeError("len() of unsized object")
 
     def _check_c_contiguous(self) -> bool:
         stride = self.itemsize
-        for d in range(self.ndim-1, -1, -1):
+        for d in range(self.ndim - 1, -1, -1):
             if stride != self.strides[d]:
                 return False
             stride *= self.shape[d]
         return True
-    
+
     def _check_f_contiguous(self) -> bool:
         stride = self.itemsize
         for d in range(self.ndim):
@@ -150,23 +155,29 @@ class NDArrayBase():
     def T(self):
         return self.transpose()
 
-    def get(self, stream=None, order='C', out=None) -> np.ndarray:
+    def get(self, stream=None, order="C", out=None) -> np.ndarray:
         # ignore stream
-        assert order == 'C'
+        assert order == "C"
         assert out is None
         return self.get_data()
 
     def to_cpu(self) -> np.ndarray:
         return self.get()
-    
+
     def _is_full_view(self) -> bool:
         if self.offset != 0:
             return False
         if self.size != self.buffer.size:
             return False
         return True
-    
-    def get_view(self: A, shape: Tuple[int, ...], dtype: np.dtype, strides: Tuple[int, ...], offset: int) -> A:
+
+    def get_view(
+        self: A,
+        shape: Tuple[int, ...],
+        dtype: np.dtype,
+        strides: Tuple[int, ...],
+        offset: int,
+    ) -> A:
         raise NotImplementedError
 
     def broadcast_to(self: A, shape: Union[tuple, int], subok=False) -> A:
@@ -188,45 +199,55 @@ class NDArrayBase():
     def dot(self, other, out=None):
         # TODO: avoid circular reference
         from wgpy.binary import dot
+
         return dot(self, other, out=out)
 
     def max(self, *args, **kwargs):
         from wgpy.reduction import max
+
         return max(self, *args, **kwargs)
 
     def argmax(self, *args, **kwargs):
         from wgpy.construct import asarray, asnumpy
+
         return asarray(asnumpy(self).argmax(*args, **kwargs))
 
     def reshape(self, *shape):
         # array.reshape(2,3) and array.reshape((2,3)) are ok
         from wgpy.manipulation import reshape
+
         return reshape(self, args_to_tuple_of_int(shape))
 
     def sum(self, *args, **kwargs):
         from wgpy.reduction import sum
+
         return sum(self, *args, **kwargs)
 
     def mean(self, *args, **kwargs):
         from wgpy.reduction import mean
+
         return mean(self, *args, **kwargs)
 
     def var(self, *args, **kwargs):
         from wgpy.reduction import var
+
         return var(self, *args, **kwargs)
 
-    def squeeze(self, axis: Optional[Union[int, Tuple[int]]]=None):
+    def squeeze(self, axis: Optional[Union[int, Tuple[int]]] = None):
         from wgpy.manipulation import squeeze
+
         return squeeze(self, axis)
 
     def transpose(self, *axes):
         from wgpy.manipulation import transpose
+
         return transpose(self, args_to_tuple_of_int(axes))
 
     def ravel(self):
         from wgpy.manipulation import ravel
+
         return ravel(self)
-    
+
     def reduced_view(self: A) -> A:
         # not exist in numpy, but exist in cupy
         # https://github.com/cupy/cupy/issues/2114
@@ -250,11 +271,11 @@ class NDArrayBase():
             new_strides = list(self.strides)
             while True:
                 changed = False
-                for d in range(len(new_shape)-1):
-                    if new_strides[d] == new_strides[d+1] * new_shape[d+1]:
+                for d in range(len(new_shape) - 1):
+                    if new_strides[d] == new_strides[d + 1] * new_shape[d + 1]:
                         # dim d and d+1 can be combined
-                        new_shape[d] = new_shape[d] * new_shape[d+1]
-                        new_shape.pop(d+1)
+                        new_shape[d] = new_shape[d] * new_shape[d + 1]
+                        new_shape.pop(d + 1)
                         new_strides.pop(d)
                         changed = True
                         break
@@ -262,4 +283,6 @@ class NDArrayBase():
                     break
             shape = tuple(new_shape)
             strides = tuple(new_strides)
-        return self.get_view(shape, dtype=self.dtype, strides=strides, offset=self.offset)
+        return self.get_view(
+            shape, dtype=self.dtype, strides=strides, offset=self.offset
+        )

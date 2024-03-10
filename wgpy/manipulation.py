@@ -3,6 +3,7 @@ import numpy as np
 from wgpy_backends.runtime.ndarray import ndarray
 from wgpy.common.shape_util import axis_to_tuple, calculate_c_contiguous_strides
 
+
 def reshape(a: ndarray, newshape: Tuple[int, ...]) -> ndarray:
     # newshape can include -1
     minus_axis = None
@@ -25,12 +26,23 @@ def reshape(a: ndarray, newshape: Tuple[int, ...]) -> ndarray:
 
     if a.flags.c_contiguous:
         # make view
-        return a.get_view(newshape, a.dtype, calculate_c_contiguous_strides(newshape, a.itemsize), a.offset)
+        return a.get_view(
+            newshape,
+            a.dtype,
+            calculate_c_contiguous_strides(newshape, a.itemsize),
+            a.offset,
+        )
     else:
         # copy
         copy = a.copy()
         # TODO: specify shape and strides for copy itself, not make view
-        return copy.get_view(newshape, copy.dtype, calculate_c_contiguous_strides(newshape, copy.itemsize), copy.offset)
+        return copy.get_view(
+            newshape,
+            copy.dtype,
+            calculate_c_contiguous_strides(newshape, copy.itemsize),
+            copy.offset,
+        )
+
 
 def transpose(a: ndarray, axes=None) -> ndarray:
     if axes is None or len(axes) == 0:
@@ -41,10 +53,12 @@ def transpose(a: ndarray, axes=None) -> ndarray:
     newstrides = tuple(a.strides[axes[d]] for d in range(a.ndim))
     return a.get_view(newshape, a.dtype, newstrides, a.offset)
 
+
 def ravel(a: ndarray) -> ndarray:
     return reshape(a, (-1,))
 
-def rollaxis(a: ndarray, axis: int, start: int=0) -> ndarray:
+
+def rollaxis(a: ndarray, axis: int, start: int = 0) -> ndarray:
     if start < 0:
         start = start + a.ndim
     if start < 0 or start > a.ndim:
@@ -61,6 +75,7 @@ def rollaxis(a: ndarray, axis: int, start: int=0) -> ndarray:
     newstrides.insert(start, t_strides)
 
     return a.get_view(tuple(newshape), a.dtype, tuple(newstrides), a.offset)
+
 
 def expand_dims(a: ndarray, axis: Union[int, Tuple[int]]) -> ndarray:
     axis = axis_to_tuple(axis)
@@ -80,7 +95,8 @@ def expand_dims(a: ndarray, axis: Union[int, Tuple[int]]) -> ndarray:
             orig_i += 1
     return a.get_view(tuple(newshape), a.dtype, tuple(newstrides), a.offset)
 
-def squeeze(a: ndarray, axis: Optional[Union[int, Tuple[int]]]=None) -> ndarray:
+
+def squeeze(a: ndarray, axis: Optional[Union[int, Tuple[int]]] = None) -> ndarray:
     if axis is not None:
         axis = axis_to_tuple(axis)
     newshape = []
@@ -94,14 +110,26 @@ def squeeze(a: ndarray, axis: Optional[Union[int, Tuple[int]]]=None) -> ndarray:
         else:
             if d in axis:
                 if a.shape[d] != 1:
-                    raise ValueError('cannot select an axis to squeeze out which has size not equal to one')
+                    raise ValueError(
+                        "cannot select an axis to squeeze out which has size not equal to one"
+                    )
                 remove = True
         if not remove:
             newshape.append(a.shape[d])
             newstrides.append(a.strides[d])
     return a.get_view(tuple(newshape), a.dtype, tuple(newstrides), a.offset)
 
+
 def broadcast_to(array: ndarray, shape: Union[tuple, int], subok=False) -> ndarray:
     return array.broadcast_to(shape, subok)
 
-__all__ = ['broadcast_to', 'expand_dims', 'rollaxis', 'reshape', 'transpose', 'ravel', 'squeeze']
+
+__all__ = [
+    "broadcast_to",
+    "expand_dims",
+    "rollaxis",
+    "reshape",
+    "transpose",
+    "ravel",
+    "squeeze",
+]

@@ -1,6 +1,6 @@
 class Device:
     def __init__(self, device=None) -> None:
-        self.id = 0 # single device
+        self.id = 0  # single device
 
     def __enter__(self):
         return self
@@ -13,5 +13,6 @@ class Device:
 
     def get_device_id(self):
         return self.id
+
 
 device = Device()

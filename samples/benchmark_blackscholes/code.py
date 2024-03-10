@@ -7,6 +7,7 @@ import time
 use_gpu = pythonIO.config.use_gpu
 kernel_type = pythonIO.config.kernel_type
 
+
 def BlackScholes(S, X, T, R, V):
     xp = cp.get_array_module(S)
     xpx = cupyx.scipy.get_array_module(S)
@@ -20,6 +21,7 @@ def BlackScholes(S, X, T, R, V):
     del d2
     eRT = xp.exp(-R * T)
     return S * n1 - X * eRT * n2
+
 
 ### begin custom kernel
 
@@ -113,6 +115,7 @@ y = s * n1 - x * eRT * n2;
 
 _nop_kernel = None
 
+
 def customNOP(S, X, T, R, V):
     global _nop_kernel
     if backend == "webgpu":
@@ -138,7 +141,10 @@ y = 1.0;
             )
         return _nop_kernel(S, X, T, R, V)
     raise ValueError
+
+
 ### end custom kernel
+
 
 def run_once(price, strike, t, use_gpu, kernel_type):
     if use_gpu:

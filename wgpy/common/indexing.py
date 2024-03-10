@@ -1,13 +1,14 @@
 import math
 from typing import Tuple
 
+
 def ellipsis_to_slice(idxs, t_ndim: int) -> list:
     slice_count = 0
     has_ellipsis = False
     for i, idx in enumerate(idxs):
         if idx is Ellipsis:
             if has_ellipsis:
-                raise ValueError('Multiple Ellipsis (...) found.')
+                raise ValueError("Multiple Ellipsis (...) found.")
             has_ellipsis = True
         elif isinstance(idx, slice) or isinstance(idx, int):
             slice_count += 1
@@ -17,8 +18,8 @@ def ellipsis_to_slice(idxs, t_ndim: int) -> list:
             raise ValueError(f"Index {idx} is not supported.")
     ndim_to_fill = t_ndim - slice_count
     if ndim_to_fill < 0:
-        raise ValueError('The number of index exceeds array dimensions.')
-    
+        raise ValueError("The number of index exceeds array dimensions.")
+
     if has_ellipsis:
         idxs_wo_ellipsis = []
         for idx in idxs:
@@ -33,13 +34,16 @@ def ellipsis_to_slice(idxs, t_ndim: int) -> list:
             idxs_wo_ellipsis.append(slice(None))
     return idxs_wo_ellipsis
 
-def calc_strides(idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_offset: int) -> Tuple[Tuple[int, ...], Tuple[int, ...], int]:
+
+def calc_strides(
+    idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_offset: int
+) -> Tuple[Tuple[int, ...], Tuple[int, ...], int]:
     if isinstance(idxs, (int, slice)) or idxs is None or idxs is Ellipsis:
         idxs = [idxs]
     elif isinstance(idxs, tuple):
         idxs = list(idxs)
     else:
-        raise ValueError('array index must be int, slice, None, Ellipsis or tuple')
+        raise ValueError("array index must be int, slice, None, Ellipsis or tuple")
     idxs_wo_ellipsis = ellipsis_to_slice(idxs, len(t_shape))
     idxs_wo_new_axis = []
     new_axis_dims = []
@@ -51,7 +55,7 @@ def calc_strides(idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_o
             idxs_wo_new_axis.append(idx)
             if isinstance(idx, int):
                 squeeze_dims.append(i)
-    
+
     # normalize slice
     assert len(idxs_wo_new_axis) == len(t_shape)
     v_shape = []
@@ -61,7 +65,9 @@ def calc_strides(idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_o
         if isinstance(idx, int):
             start = idx if idx >= 0 else idx + t_len
             if start < 0 or start >= t_len:
-                raise ValueError(f"index {idx} for axis {i} is out of range for shape {t_shape}")
+                raise ValueError(
+                    f"index {idx} for axis {i} is out of range for shape {t_shape}"
+                )
             stop = start + 1
             step = 1
             v_len = 1
@@ -92,7 +98,7 @@ def calc_strides(idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_o
                     v_len = int(math.ceil((stop - start) / step))
                 else:
                     v_len = 0
-            else: # step <= 0
+            else:  # step <= 0
                 if idx.start is None:
                     start = t_len - 1
                 else:
@@ -122,13 +128,13 @@ def calc_strides(idxs, t_shape: Tuple[int, ...], t_strides: Tuple[int, ...], t_o
         v_shape.append(v_len)
         step_strides.append(step_stride)
         step_offset_num += step_offset
-    
+
     for axis in new_axis_dims:
         v_shape.insert(axis, 1)
         step_strides.insert(axis, 0)
-    
+
     for axis in reversed(squeeze_dims):
         v_shape.pop(axis)
         step_strides.pop(axis)
-    
+
     return tuple(v_shape), tuple(step_strides), step_offset_num
