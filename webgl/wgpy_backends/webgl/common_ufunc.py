@@ -100,6 +100,15 @@ invert = create_ufunc(
     ],
     "out0 = ~in0",
 )
+sign = create_ufunc(
+    "sign",
+    [
+        ("B->B", "out0 = in0 == 0u ? 0u : 1u"),
+        "i->i",
+        "f->f",
+    ],
+    "out0 = sign(in0)",
+)
 
 unary_float_types = ["f->f"]
 exp = create_ufunc("exp", unary_float_types, "out0 = exp(in0)")

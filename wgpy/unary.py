@@ -21,4 +21,8 @@ def sqrt(x: ndarray, **kwargs) -> ndarray:
     return x.array_func.ufunc.sqrt(x, **kwargs)
 
 
-__all__ = ["exp", "log", "tanh", "reciprocal", "sqrt"]
+def sign(x: ndarray, **kwargs) -> ndarray:
+    return x.array_func.ufunc.sign(x, **kwargs)
+
+
+__all__ = ["exp", "log", "tanh", "reciprocal", "sqrt", "sign"]

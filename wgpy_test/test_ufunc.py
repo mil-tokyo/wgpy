@@ -311,6 +311,20 @@ def test_invert():
     allclose(~n1, cp.asnumpy(tr))
 
 
+def test_sign():
+    n1 = np.array([-1.0, 0.0, 2.5, 123.45], dtype=np.float32)
+    tr = cp.sign(cp.asarray(n1))
+    allclose(np.sign(n1), cp.asnumpy(tr))
+
+    n1 = np.array([-1, 0, 1, -2147483647], dtype=np.int32)
+    tr = cp.sign(cp.asarray(n1))
+    allclose(np.sign(n1), cp.asnumpy(tr))
+
+    n1 = np.array([0, 1, 2, 255], dtype=np.uint8)
+    tr = cp.sign(cp.asarray(n1))
+    allclose(np.sign(n1), cp.asnumpy(tr))
+
+
 def test_exp():
     n1 = np.array([-1.0, 0.0, 2.5, 0.1], dtype=np.float32)
     tr = cp.exp(cp.asarray(n1))
