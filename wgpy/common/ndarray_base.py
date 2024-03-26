@@ -218,10 +218,10 @@ class NDArrayBase:
 
         return reshape(self, args_to_tuple_of_int(shape))
 
-    def sum(self, *args, **kwargs):
+    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
         from wgpy.reduction import sum
 
-        return sum(self, *args, **kwargs)
+        return sum(self, axis=axis, dtype=dtype, out=out, keepdims=keepdims)
 
     def mean(self, *args, **kwargs):
         from wgpy.reduction import mean
