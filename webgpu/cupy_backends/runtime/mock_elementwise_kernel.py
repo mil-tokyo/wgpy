@@ -569,6 +569,33 @@ def sigmoid_bwd(elementwise_kernel, args):
     return gx
 
 
+div_bwd_kernel_gx0 = None
+div_bwd_kernel_gx1 = None
+
+
+def div_bwd(elementwise_kernel, args):
+    x0, x1, gy = args
+    global div_bwd_kernel_gx0
+    if div_bwd_kernel_gx0 is None:
+        div_bwd_kernel_gx0 = ElementwiseKernel(
+            in_params="T x1, T gy",
+            out_params="T gx0",
+            operation="gx0 = gy / x1",
+            name="div_bwd_gx0",
+        )
+    global div_bwd_kernel_gx1
+    if div_bwd_kernel_gx1 is None:
+        div_bwd_kernel_gx1 = ElementwiseKernel(
+            in_params="T gx0, T x0, T x1",
+            out_params="T gx1",
+            operation="gx1 = -gx0 * x0 / x1",
+            name="div_bwd_gx1",
+        )
+    gx0 = div_bwd_kernel_gx0(x1, gy)
+    gx1 = div_bwd_kernel_gx1(gx0, x0, x1)
+    return gx0, gx1
+
+
 def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None):
     if elementwise_kernel.name == "softmax_crossent_bwd":
         return softmax_crossent_bwd(elementwise_kernel, args)
@@ -596,6 +623,8 @@ def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None
         return sigmoid_fwd(elementwise_kernel, args)
     elif elementwise_kernel.name == "sigmoid_bwd":
         return sigmoid_bwd(elementwise_kernel, args)
+    elif elementwise_kernel.name == "div_bwd":
+        return div_bwd(elementwise_kernel, args)
     else:
         msg = f"""Requested elementwise kernel is not implemented in WebGPU.
 {repr({'in_params': elementwise_kernel.in_params, 'out_params': elementwise_kernel.out_params, 'operation': elementwise_kernel.operation, 'name': elementwise_kernel.name, 'reduce_dims': elementwise_kernel.reduce_dims, 'preamble': elementwise_kernel.preamble, 'no_return': elementwise_kernel.no_return, 'return_tuple': elementwise_kernel.return_tuple, 'loop_prep': elementwise_kernel.loop_prep, 'after_loop': elementwise_kernel.after_loop})}

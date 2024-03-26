@@ -77,6 +77,10 @@ def test_sigmoid():
     )
 
 
+def test_div():
+    forward_backward_link(Sequential(lambda x: (x / (x + 5.0))), (2, 8), [])
+
+
 def test_batch_normalization():
     input_shape = (10, 3, 7, 8)
     input_batches = [np.random.rand(*input_shape).astype(np.float32) for _ in range(4)]
