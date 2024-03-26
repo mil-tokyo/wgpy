@@ -105,6 +105,7 @@ sign = create_ufunc(
     [
         ("B->B", "if (in0 == 0) { out0 = 0; } else { out0 = 1; }"),
         "i->i",
+        "f->f",
     ],
     "out0 = sign(in0)",
 )
