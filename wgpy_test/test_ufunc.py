@@ -386,6 +386,26 @@ def test_fmin():
     allclose(np.fmin(n1, 0), cp.asnumpy(t4))
 
 
+def test_clip():
+    n1 = np.array([1, 2, 3, 4], dtype=np.float32)
+    n2 = np.array([0, -1.5, 5.0, 0.0], dtype=np.float32)
+    n3 = np.array([2, 1.5, 10.0, 4.0], dtype=np.float32)
+    t1 = cp.asarray(n1)
+    t2 = cp.asarray(n2)
+    t3 = cp.asarray(n3)
+    t4 = cp.clip(t1, t2, t3)
+    allclose(np.clip(n1, n2, n3), cp.asnumpy(t4))
+
+    t5 = cp.clip(t1, 1.5, 3.5)
+    allclose(np.clip(n1, 1.5, 3.5), cp.asnumpy(t5))
+
+    t6 = cp.clip(t1, 1.5, None)
+    allclose(np.clip(n1, 1.5, None), cp.asnumpy(t6))
+
+    t7 = cp.clip(t1, None, 3.5)
+    allclose(np.clip(n1, None, 3.5), cp.asnumpy(t7))
+
+
 def test_divide():
     n1 = np.array([1, -1.0, 3.0, 4], dtype=np.float32)
     n2 = np.array([-0.5, 1.5, 2.0, 0.5], dtype=np.float32)

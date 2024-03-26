@@ -59,6 +59,15 @@ fmin = create_ufunc(
     ],
     "out0 = min(in0, in1)",
 )
+clip = create_ufunc(
+    "clip",
+    [
+        "BBB->B",
+        "iii->i",
+        "fff->f",
+    ],
+    "out0 = max(min(in0, in2), in1)",
+)
 
 unary_types = ["?->?", "B->B", "i->i", "f->f"]
 pos = create_ufunc("pos", unary_types, "out0 = in0")

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 import numpy as np
 from wgpy.construct import asarray, asnumpy
 from wgpy_backends.runtime.ndarray import ndarray
@@ -76,4 +76,27 @@ def fmin(x: ndarray, y: ndarray, out=None, **kwargs) -> ndarray:
     return x.array_func.ufunc.fmin(x, y, out=out, **kwargs)
 
 
-__all__ = ["dot", "matmul", "tensordot", "divide", "maximum", "fmax", "minimum", "fmin"]
+def clip(
+    a: ndarray, a_min: Optional[ndarray], a_max: Optional[ndarray], out=None, **kwargs
+) -> ndarray:
+    if a_min is None:
+        return minimum(a, a_max, out=out, **kwargs)
+    if a_max is None:
+        return maximum(a, a_min, out=out, **kwargs)
+    a = asarray(a)
+    a_min = asarray(a_min)
+    a_max = asarray(a_max)
+    return a.array_func.ufunc.clip(a, a_min, a_max, out=out, **kwargs)
+
+
+__all__ = [
+    "dot",
+    "matmul",
+    "tensordot",
+    "divide",
+    "maximum",
+    "fmax",
+    "minimum",
+    "fmin",
+    "clip",
+]
