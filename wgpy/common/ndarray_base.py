@@ -286,3 +286,6 @@ class NDArrayBase:
         return self.get_view(
             shape, dtype=self.dtype, strides=strides, offset=self.offset
         )
+
+    def scatter_add(self, slices: object, value: object):
+        self[slices] = self[slices] + value

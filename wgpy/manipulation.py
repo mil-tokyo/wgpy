@@ -1,6 +1,7 @@
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 import numpy as np
 from wgpy_backends.runtime.ndarray import ndarray
+from wgpy.construct import asarray, asnumpy
 from wgpy.common.shape_util import axis_to_tuple, calculate_c_contiguous_strides
 
 
@@ -124,6 +125,20 @@ def broadcast_to(array: ndarray, shape: Union[tuple, int], subok=False) -> ndarr
     return array.broadcast_to(shape, subok)
 
 
+def concatenate(
+    arrays: List[ndarray], axis: int = 0, out=None, dtype=None, casting="same_kind"
+) -> ndarray:
+    # TODO implement on GPU
+    if out is not None:
+        raise ValueError("out is not supported")
+    if dtype is not None:
+        raise ValueError("dtype is not supported")
+    if casting != "same_kind":
+        raise ValueError("casting is not supported")
+    np_arrays = [asnumpy(a) for a in arrays]
+    return asarray(np.concatenate(np_arrays, axis=axis))
+
+
 __all__ = [
     "broadcast_to",
     "expand_dims",
@@ -132,4 +147,5 @@ __all__ = [
     "transpose",
     "ravel",
     "squeeze",
+    "concatenate",
 ]
