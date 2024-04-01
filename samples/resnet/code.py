@@ -3,11 +3,15 @@
 # https://tutorials.chainer.org/ja/14_Basics_of_Chainer.html
 
 import micropip
-await micropip.install('/lib/chainer-5.4.0-py3-none-any.whl')
-await micropip.install('/samples/resnet/dist/resnet-0.0.1-py3-none-any.whl')
+
+await micropip.install("/lib/chainer-5.4.0-py3-none-any.whl")
+await micropip.install("/samples/resnet/dist/resnet-0.0.1-py3-none-any.whl")
 from pyodide.http import pyfetch
-response = await pyfetch('/lib/cifar100.zip') # mnist.zip contains train.npz, test.npz
-await response.unpack_archive(extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/cifar", format="zip")
+
+response = await pyfetch("/lib/cifar100.zip")  # mnist.zip contains train.npz, test.npz
+await response.unpack_archive(
+    extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/cifar", format="zip"
+)
 
 from js import pythonIO
 import numpy as np
@@ -16,6 +20,7 @@ from chainer import training
 from chainer import iterators, optimizers
 import chainer.links as L
 from chainer.training import extensions
+
 chainer.print_runtime_info()
 from resnet import ResNet18
 
@@ -29,10 +34,11 @@ np.random.seed(1)
 
 from chainer.datasets import split_dataset_random
 
-gpu_id = -1 # cpu
+gpu_id = -1  # cpu
 try:
     import cupy as cp
-    gpu_id = 0 # gpu
+
+    gpu_id = 0  # gpu
 except:
     pass
 
@@ -64,7 +70,7 @@ optimizer.setup(model)
 updater = training.updaters.StandardUpdater(train_iter, optimizer, device=gpu_id)
 
 # Setup a Trainer
-trainer = training.Trainer(updater, (max_epoch, 'epoch'), out='mnist_result')
+trainer = training.Trainer(updater, (max_epoch, "epoch"), out="mnist_result")
 
 from chainer.training import extensions
 
@@ -73,19 +79,33 @@ trainer.extend(extensions.LogReport(trigger=chainer.training.triggers.TimeTrigge
 # trainer.extend(extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
 # trainer.extend(extensions.snapshot_object(model.predictor, filename='model_epoch-{.updater.epoch}'))
 trainer.extend(extensions.Evaluator(test_iter, model, device=gpu_id))
-trainer.extend(extensions.PrintReport(['epoch', 'iteration', 'main/loss', 'main/accuracy', 'validation/main/loss', 'validation/main/accuracy', 'elapsed_time']))
+trainer.extend(
+    extensions.PrintReport(
+        [
+            "epoch",
+            "iteration",
+            "main/loss",
+            "main/accuracy",
+            "validation/main/loss",
+            "validation/main/accuracy",
+            "elapsed_time",
+        ]
+    )
+)
 # matplotlib does not work on worker
-#trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], x_key='epoch', file_name='loss.png'))
-#trainer.extend(extensions.PlotReport(['main/accuracy', 'validation/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
+# trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], x_key='epoch', file_name='loss.png'))
+# trainer.extend(extensions.PlotReport(['main/accuracy', 'validation/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
 
 trainer.run()
 try:
     import wgpy_backends.webgl
+
     print(wgpy_backends.webgl.get_performance_metrics())
 except:
     pass
 try:
     import wgpy_backends.webgpu
+
     print(wgpy_backends.webgpu.get_performance_metrics())
 except:
     pass

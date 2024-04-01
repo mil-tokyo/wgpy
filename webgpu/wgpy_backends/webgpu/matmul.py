@@ -7,13 +7,19 @@ from wgpy_backends.webgpu.ndarray import ndarray
 added_kernels = set()
 elementwise_kernels = {}
 
-def _matmul_generic(lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> ndarray:
+
+def _matmul_generic(
+    lhs: ndarray, rhs: ndarray, out: Optional[ndarray] = None
+) -> ndarray:
     m, k = lhs.shape
     k2, n = rhs.shape
     assert k == k2
-    kernel_name = f'matmul'
+    kernel_name = f"matmul"
     if kernel_name not in added_kernels:
-        get_platform().addKernel(kernel_name, {'source': """@group(0) @binding(0)
+        get_platform().addKernel(
+            kernel_name,
+            {
+                "source": """@group(0) @binding(0)
 var<storage,read> array_a: array<f32>;
 
 @group(0) @binding(1)
@@ -63,35 +69,81 @@ sum = array_a[LHS_OFFSET + y * LHS_STRIDE_0 + k * LHS_STRIDE_1] * array_b[RHS_OF
 array_c[x + y * N] = sum * cmeta.alpha;
 }
 """,
-            'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
+                "bindingTypes": [
+                    "read-only-storage",
+                    "read-only-storage",
+                    "storage",
+                    "read-only-storage",
+                ],
+            },
+        )
         added_kernels.add(kernel_name)
-    meta = create_meta_buffer_from_structure((m, n, k, lhs.offset // lhs.itemsize, lhs.strides[0] // lhs.itemsize, lhs.strides[1] // lhs.itemsize, rhs.offset // rhs.itemsize, rhs.strides[0] // rhs.itemsize, rhs.strides[1] // rhs.itemsize, 1.0), 'u4,u4,u4,u4,u4,u4,u4,u4,u4,f4')
+    meta = create_meta_buffer_from_structure(
+        (
+            m,
+            n,
+            k,
+            lhs.offset // lhs.itemsize,
+            lhs.strides[0] // lhs.itemsize,
+            lhs.strides[1] // lhs.itemsize,
+            rhs.offset // rhs.itemsize,
+            rhs.strides[0] // rhs.itemsize,
+            rhs.strides[1] // rhs.itemsize,
+            1.0,
+        ),
+        "u4,u4,u4,u4,u4,u4,u4,u4,u4,f4",
+    )
     if out is None:
         out = ndarray((m, n), lhs.dtype)
     else:
         assert out.flags.c_contiguous_full
 
-    get_platform().runKernel({
-        'name': kernel_name,
-        'tensors': [lhs.buffer.buffer_id, rhs.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(math.ceil(n/8)), 'y': int(math.ceil(m/8)), 'z': 1},
-    })
+    get_platform().runKernel(
+        {
+            "name": kernel_name,
+            "tensors": [
+                lhs.buffer.buffer_id,
+                rhs.buffer.buffer_id,
+                out.buffer.buffer_id,
+                meta.buffer_id,
+            ],
+            "workGroups": {
+                "x": int(math.ceil(n / 8)),
+                "y": int(math.ceil(m / 8)),
+                "z": 1,
+            },
+        }
+    )
 
     return out
 
-def _matmul_m32n64k4_check(lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> bool:
-    m, k = lhs.shape
-    _, n = rhs.shape
-    return m % 32 == 0 and n % 64 == 0 and k % 4 == 0 \
-        and lhs.flags.c_contiguous_full and rhs.flags.c_contiguous_full \
-        and (out is None or out.flags.c_contiguous_full)
 
-def _matmul_m32n64k4(lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> ndarray:
+def _matmul_m32n64k4_check(
+    lhs: ndarray, rhs: ndarray, out: Optional[ndarray] = None
+) -> bool:
     m, k = lhs.shape
     _, n = rhs.shape
-    kernel_name = f'matmul_m32n64k4'
+    return (
+        m % 32 == 0
+        and n % 64 == 0
+        and k % 4 == 0
+        and lhs.flags.c_contiguous_full
+        and rhs.flags.c_contiguous_full
+        and (out is None or out.flags.c_contiguous_full)
+    )
+
+
+def _matmul_m32n64k4(
+    lhs: ndarray, rhs: ndarray, out: Optional[ndarray] = None
+) -> ndarray:
+    m, k = lhs.shape
+    _, n = rhs.shape
+    kernel_name = f"matmul_m32n64k4"
     if kernel_name not in added_kernels:
-        get_platform().addKernel(kernel_name, {'source': """@group(0) @binding(0)
+        get_platform().addKernel(
+            kernel_name,
+            {
+                "source": """@group(0) @binding(0)
 var<storage,read> array_a: array<vec4<f32>>;
 
 @group(0) @binding(1)
@@ -192,23 +244,38 @@ array_c[x * 2u + 1u + (y * 4u + 2u) * ND4] = sum12;
 array_c[x * 2u + 1u + (y * 4u + 3u) * ND4] = sum13;
 }
 """,
-            'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
+                "bindingTypes": [
+                    "read-only-storage",
+                    "read-only-storage",
+                    "storage",
+                    "read-only-storage",
+                ],
+            },
+        )
         added_kernels.add(kernel_name)
-    meta = create_meta_buffer_from_structure((m, n, k), 'u4,u4,u4')
+    meta = create_meta_buffer_from_structure((m, n, k), "u4,u4,u4")
     if out is None:
         out = ndarray((m, n), lhs.dtype)
     else:
         assert out.flags.c_contiguous_full
 
-    get_platform().runKernel({
-        'name': kernel_name,
-        'tensors': [lhs.buffer.buffer_id, rhs.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(n//64), 'y': int(m//32), 'z': 1},
-    })
+    get_platform().runKernel(
+        {
+            "name": kernel_name,
+            "tensors": [
+                lhs.buffer.buffer_id,
+                rhs.buffer.buffer_id,
+                out.buffer.buffer_id,
+                meta.buffer_id,
+            ],
+            "workGroups": {"x": int(n // 64), "y": int(m // 32), "z": 1},
+        }
+    )
 
     return out
 
-def matmul_impl(lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> ndarray:
+
+def matmul_impl(lhs: ndarray, rhs: ndarray, out: Optional[ndarray] = None) -> ndarray:
     # 2D only
     m, k = lhs.shape
     k2, n = rhs.shape
@@ -217,12 +284,15 @@ def matmul_impl(lhs: ndarray, rhs: ndarray, out: Optional[ndarray]=None) -> ndar
         return _matmul_m32n64k4(lhs, rhs, out)
     return _matmul_generic(lhs, rhs, out)
 
-def _tensordot_convforward_check(a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]) -> bool:
+
+def _tensordot_convforward_check(
+    a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]
+) -> bool:
     if a.ndim != 6 or b.ndim != 4:
         return False
     if len(axes) != 2:
         return False
-    if list(axes[0]) != [1,2,3] or list(axes[1]) != [1,2,3]:
+    if list(axes[0]) != [1, 2, 3] or list(axes[1]) != [1, 2, 3]:
         return False
     if not a.flags.c_contiguous_full or not b.flags.c_contiguous_full:
         return False
@@ -233,6 +303,7 @@ def _tensordot_convforward_check(a: ndarray, b: ndarray, axes: Tuple[List[int], 
     if oc % 4 != 0:
         return False
     return True
+
 
 def _tensordot_convforward(a: ndarray, b: ndarray) -> ndarray:
     # convolution forward: tensordot(col(ndim=6), W(ndim=4), axes=((1,2,3),(1,2,3)))
@@ -245,12 +316,14 @@ def _tensordot_convforward(a: ndarray, b: ndarray) -> ndarray:
     hw = h * w
     hw_is_mul_32 = hw % 32 == 0
     oc_is_mul_32 = oc % 32 == 0
-    kernel_key = ('tensordot_cf', hw_is_mul_32, oc_is_mul_32)
+    kernel_key = ("tensordot_cf", hw_is_mul_32, oc_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
-        get_platform().addKernel(kernel_name, {'source':
-"""@group(0) @binding(0)
+        get_platform().addKernel(
+            kernel_name,
+            {
+                "source": """@group(0) @binding(0)
 var<storage,read> array_a: array<f32>;
 
 @group(0) @binding(1)
@@ -274,7 +347,9 @@ cst2: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-""" f"@compute @workgroup_size(1,{8 if hw_is_mul_32 else 1},{8 if oc_is_mul_32 else 1})" """
+"""
+                f"@compute @workgroup_size(1,{8 if hw_is_mul_32 else 1},{8 if oc_is_mul_32 else 1})"
+                """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -301,31 +376,55 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
 }
 }
 """,
-            'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
+                "bindingTypes": [
+                    "read-only-storage",
+                    "read-only-storage",
+                    "storage",
+                    "read-only-storage",
+                ],
+            },
+        )
         added_kernels.add(kernel_name)
 
     out = ndarray((n, h, w, oc), a.dtype)
-    meta = create_meta_buffer_from_structure((
-        ckhkw,
-        ckhkw * hw,
-        hw,
-        1,
-        ckhkw,
-        1,
-        hw * oc,
-        oc,
-        1,
-        ), 'u4,u4,u4,u4,u4,u4,u4,u4,u4')
+    meta = create_meta_buffer_from_structure(
+        (
+            ckhkw,
+            ckhkw * hw,
+            hw,
+            1,
+            ckhkw,
+            1,
+            hw * oc,
+            oc,
+            1,
+        ),
+        "u4,u4,u4,u4,u4,u4,u4,u4,u4",
+    )
 
-    get_platform().runKernel({
-        'name': kernel_name,
-        'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(n), 'y': int(hw // 32 if hw_is_mul_32 else hw // 4), 'z': int(oc // 32 if oc_is_mul_32 else oc // 4)},
-    })
+    get_platform().runKernel(
+        {
+            "name": kernel_name,
+            "tensors": [
+                a.buffer.buffer_id,
+                b.buffer.buffer_id,
+                out.buffer.buffer_id,
+                meta.buffer_id,
+            ],
+            "workGroups": {
+                "x": int(n),
+                "y": int(hw // 32 if hw_is_mul_32 else hw // 4),
+                "z": int(oc // 32 if oc_is_mul_32 else oc // 4),
+            },
+        }
+    )
 
     return out
 
-def _tensordot_convbackwardinput_check(a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]) -> bool:
+
+def _tensordot_convbackwardinput_check(
+    a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]
+) -> bool:
     if a.ndim != 4 or b.ndim != 4:
         return False
     if len(axes) != 2:
@@ -342,6 +441,7 @@ def _tensordot_convbackwardinput_check(a: ndarray, b: ndarray, axes: Tuple[List[
         return False
     return True
 
+
 def _tensordot_convbackwardinput(a: ndarray, b: ndarray) -> ndarray:
     # convolution backward col: tensordot(W(ndim=4), x(ndim=4), axes=(0, 1))
     # a: (OC, C, KH, KW) treat as (OC, C*KH*KW)
@@ -353,12 +453,14 @@ def _tensordot_convbackwardinput(a: ndarray, b: ndarray) -> ndarray:
     hw = h * w
     ckhkw_is_mul_32 = ckhkw % 32 == 0
     hw_is_mul_32 = hw % 32 == 0
-    kernel_key = ('tensordot_cbi', ckhkw_is_mul_32, hw_is_mul_32)
+    kernel_key = ("tensordot_cbi", ckhkw_is_mul_32, hw_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
-        get_platform().addKernel(kernel_name, {'source':
-"""@group(0) @binding(0)
+        get_platform().addKernel(
+            kernel_name,
+            {
+                "source": """@group(0) @binding(0)
 var<storage,read> array_a: array<f32>;
 
 @group(0) @binding(1)
@@ -382,7 +484,9 @@ cst2: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-""" f"@compute @workgroup_size({8 if ckhkw_is_mul_32 else 1},1,{8 if hw_is_mul_32 else 1})" """
+"""
+                f"@compute @workgroup_size({8 if ckhkw_is_mul_32 else 1},1,{8 if hw_is_mul_32 else 1})"
+                """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -409,37 +513,60 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
 }
 }
 """,
-            'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
+                "bindingTypes": [
+                    "read-only-storage",
+                    "read-only-storage",
+                    "storage",
+                    "read-only-storage",
+                ],
+            },
+        )
         added_kernels.add(kernel_name)
 
     out = ndarray((c, kh, kw, n, h, w), a.dtype)
-    meta = create_meta_buffer_from_structure((
-        oc,
-        ckhkw,
-        1,
-        oc * hw,
-        hw,
-        1,
-        n * hw,
-        hw,
-        1,
-        ), 'u4,u4,u4,u4,u4,u4,u4,u4,u4')
+    meta = create_meta_buffer_from_structure(
+        (
+            oc,
+            ckhkw,
+            1,
+            oc * hw,
+            hw,
+            1,
+            n * hw,
+            hw,
+            1,
+        ),
+        "u4,u4,u4,u4,u4,u4,u4,u4,u4",
+    )
 
-    get_platform().runKernel({
-        'name': kernel_name,
-        'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4), 'y': int(n), 'z': int(hw // 32 if hw_is_mul_32 else hw // 4)},
-    })
+    get_platform().runKernel(
+        {
+            "name": kernel_name,
+            "tensors": [
+                a.buffer.buffer_id,
+                b.buffer.buffer_id,
+                out.buffer.buffer_id,
+                meta.buffer_id,
+            ],
+            "workGroups": {
+                "x": int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4),
+                "y": int(n),
+                "z": int(hw // 32 if hw_is_mul_32 else hw // 4),
+            },
+        }
+    )
 
     return out
 
 
-def _tensordot_convbackwardweight_check(a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]) -> bool:
+def _tensordot_convbackwardweight_check(
+    a: ndarray, b: ndarray, axes: Tuple[List[int], List[int]]
+) -> bool:
     if a.ndim != 4 or b.ndim != 6:
         return False
     if len(axes) != 2:
         return False
-    if list(axes[0]) != [0,2,3] or list(axes[1]) != [0,4,5]:
+    if list(axes[0]) != [0, 2, 3] or list(axes[1]) != [0, 4, 5]:
         return False
     if not a.flags.c_contiguous_full or not b.flags.c_contiguous_full:
         return False
@@ -450,6 +577,7 @@ def _tensordot_convbackwardweight_check(a: ndarray, b: ndarray, axes: Tuple[List
     if oc % 4 != 0:
         return False
     return True
+
 
 def _tensordot_convbackwardweight(a: ndarray, b: ndarray) -> ndarray:
     # convolution backward weight: tensordot(gy(ndim=4), col(ndim=6), axes=((0,2,3),(0,4,5)))
@@ -462,12 +590,14 @@ def _tensordot_convbackwardweight(a: ndarray, b: ndarray) -> ndarray:
     hw = h * w
     oc_is_mul_32 = oc % 32 == 0
     ckhkw_is_mul_32 = ckhkw % 32 == 0
-    kernel_key = ('tensordot_cbw', oc_is_mul_32, ckhkw_is_mul_32)
+    kernel_key = ("tensordot_cbw", oc_is_mul_32, ckhkw_is_mul_32)
     kernel = elementwise_kernels.get(kernel_key)
     kernel_name = repr(kernel_key)
     if kernel is None:
-        get_platform().addKernel(kernel_name, {'source':
-"""@group(0) @binding(0)
+        get_platform().addKernel(
+            kernel_name,
+            {
+                "source": """@group(0) @binding(0)
 var<storage,read> array_a: array<f32>;
 
 @group(0) @binding(1)
@@ -492,7 +622,9 @@ cst1: u32,
 @group(0) @binding(3)
 var<storage,read> cmeta: CMeta;
 
-""" f"@compute @workgroup_size({8 if oc_is_mul_32 else 1},{8 if ckhkw_is_mul_32 else 1},1)" """
+"""
+                f"@compute @workgroup_size({8 if oc_is_mul_32 else 1},{8 if ckhkw_is_mul_32 else 1},1)"
+                """
 fn main(
 @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
@@ -521,42 +653,70 @@ for (var r: u32 = 0; r < 4; r = r + 1u) {
 }
 }
 """,
-            'bindingTypes': ['read-only-storage', 'read-only-storage', 'storage', 'read-only-storage'],})
+                "bindingTypes": [
+                    "read-only-storage",
+                    "read-only-storage",
+                    "storage",
+                    "read-only-storage",
+                ],
+            },
+        )
         added_kernels.add(kernel_name)
 
     out = ndarray((oc, c, kh, kw), a.dtype)
-    meta = create_meta_buffer_from_structure((
-        n,
-        hw,
-        oc * hw,
-        hw,
-        1,
-        ckhkw * hw,
-        hw,
-        1,
-        ckhkw,
-        1,
-        ), 'u4,u4,u4,u4,u4,u4,u4,u4,u4,u4')
+    meta = create_meta_buffer_from_structure(
+        (
+            n,
+            hw,
+            oc * hw,
+            hw,
+            1,
+            ckhkw * hw,
+            hw,
+            1,
+            ckhkw,
+            1,
+        ),
+        "u4,u4,u4,u4,u4,u4,u4,u4,u4,u4",
+    )
 
-    get_platform().runKernel({
-        'name': kernel_name,
-        'tensors': [a.buffer.buffer_id, b.buffer.buffer_id, out.buffer.buffer_id, meta.buffer_id],
-        'workGroups': {'x': int(oc // 32 if oc_is_mul_32 else oc // 4), 'y': int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4), 'z': 1},
-    })
+    get_platform().runKernel(
+        {
+            "name": kernel_name,
+            "tensors": [
+                a.buffer.buffer_id,
+                b.buffer.buffer_id,
+                out.buffer.buffer_id,
+                meta.buffer_id,
+            ],
+            "workGroups": {
+                "x": int(oc // 32 if oc_is_mul_32 else oc // 4),
+                "y": int(ckhkw // 32 if ckhkw_is_mul_32 else ckhkw // 4),
+                "z": 1,
+            },
+        }
+    )
 
     return out
 
-def _unify_tensordot_axis(ndims: Tuple[int, int], axes: Union[int, Tuple[int, int], Tuple[List[int], List[int]]]) -> Tuple[List[int], List[int]]:
+
+def _unify_tensordot_axis(
+    ndims: Tuple[int, int],
+    axes: Union[int, Tuple[int, int], Tuple[List[int], List[int]]],
+) -> Tuple[List[int], List[int]]:
     if isinstance(axes, int):
         # axes=2: ([ndims[0]-1,ndims[0]-2], [0, 1])
-        return [[ndims[0]-i-1 for i in range(axes)], [i for i in range(axes)]]
+        return [[ndims[0] - i - 1 for i in range(axes)], [i for i in range(axes)]]
     if isinstance(axes[0], int):
         assert isinstance(axes[1], int)
         return ([axes[0]], [axes[1]])
     assert len(axes[0]) == len(axes[1])
     return axes
 
-def _tensordot_generic(a: ndarray, b: ndarray, u_axes: Tuple[List[int], List[int]]) -> ndarray:
+
+def _tensordot_generic(
+    a: ndarray, b: ndarray, u_axes: Tuple[List[int], List[int]]
+) -> ndarray:
     ip_shape = []
     for a_axis, b_axis in zip(u_axes[0], u_axes[1]):
         s = a.shape[a_axis]
@@ -570,7 +730,14 @@ def _tensordot_generic(a: ndarray, b: ndarray, u_axes: Tuple[List[int], List[int
         if dim not in u_axes[1]:
             result_shape.append(b.shape[dim])
 
-    kernel_key = ('tensordot', a.ndim, b.ndim, tuple(u_axes[0]), tuple(u_axes[1]), tuple(ip_shape))
+    kernel_key = (
+        "tensordot",
+        a.ndim,
+        b.ndim,
+        tuple(u_axes[0]),
+        tuple(u_axes[1]),
+        tuple(ip_shape),
+    )
     kernel = elementwise_kernels.get(kernel_key)
     if kernel is None:
         # when axes=([1,2],[1,0])
@@ -588,19 +755,19 @@ def _tensordot_generic(a: ndarray, b: ndarray, u_axes: Tuple[List[int], List[int
         for dim in range(a.ndim):
             try:
                 ip_idx = u_axes[0].index(dim)
-                a_keys.append(f'ip{ip_idx}')
+                a_keys.append(f"ip{ip_idx}")
             except ValueError:
-                a_keys.append(f'_out0_{out_count}')
+                a_keys.append(f"_out0_{out_count}")
                 out_count += 1
         for dim in range(b.ndim):
             try:
                 ip_idx = u_axes[1].index(dim)
-                b_keys.append(f'ip{ip_idx}')
+                b_keys.append(f"ip{ip_idx}")
             except ValueError:
-                b_keys.append(f'_out0_{out_count}')
+                b_keys.append(f"_out0_{out_count}")
                 out_count += 1
-        lf = '\n'
-        source = f'''
+        lf = "\n"
+        source = f"""
 {lf.join(f"const IP{dim}: i32 = {ip_shape[dim]};" for dim in range(len(ip_shape)))}
 
 out0 = T(0);
@@ -609,21 +776,28 @@ out0 = T(0);
 out0 += a({','.join(a_keys)}) * b({','.join(b_keys)});
 {lf.join(f"}}" for _ in range(len(ip_shape)))}
 
-'''
+"""
         from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
+
         kernel = ElementwiseKernel(
             in_params="rawnd T a, rawnd T b",
             out_params="T out0",
             operation=source,
-            name="tensordot"
+            name="tensordot",
         )
         elementwise_kernels[kernel_key] = kernel
     from wgpy.construct import empty
+
     out = empty(tuple(result_shape), dtype=a.dtype)
     kernel(a, b, out)
     return out
 
-def tensordot_impl(a: ndarray, b: ndarray, axes: Union[int, Tuple[int, int], Tuple[List[int], List[int]]]) -> ndarray:
+
+def tensordot_impl(
+    a: ndarray,
+    b: ndarray,
+    axes: Union[int, Tuple[int, int], Tuple[List[int], List[int]]],
+) -> ndarray:
     u_axes = _unify_tensordot_axis((a.ndim, b.ndim), axes)
     assert a.dtype == b.dtype
     if _tensordot_convforward_check(a, b, u_axes):

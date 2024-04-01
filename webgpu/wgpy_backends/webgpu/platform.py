@@ -1,6 +1,7 @@
 # platform call interface
 import numpy as np
-from js import gpu # Pyodide-dependent
+from js import gpu  # Pyodide-dependent
+
 
 class WebGPUPlatform:
     def __init__(self) -> None:
@@ -17,11 +18,11 @@ class WebGPUPlatform:
 
     def disposeBuffer(self, buffer_id: int):
         return gpu.disposeBuffer(buffer_id)
-    
+
     def setCommBuf(self, buffer: np.ndarray):
         self._latest_comm_buf = buffer
         return gpu.setCommBuf(buffer)
-    
+
     def setData(self, buffer_id: int, byte_length: int):
         if not gpu.setData(buffer_id, byte_length):
             # WASM buffer may reallocated
@@ -41,7 +42,10 @@ class WebGPUPlatform:
     def runKernel(self, descriptor):
         return gpu.runKernel(descriptor)
 
+
 _instance = None
+
+
 def get_platform() -> WebGPUPlatform:
     global _instance
     if _instance is None:

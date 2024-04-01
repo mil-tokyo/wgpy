@@ -1,8 +1,10 @@
 import numpy as np
 import wgpy as cp
 
+
 def allclose(expected, actual, rtol=1e-2, atol=1e-2):
     np.testing.assert_allclose(expected, actual, rtol=rtol, atol=atol)
+
 
 def test_matmul():
     n1 = np.array([[1, 2], [3, 4]], dtype=np.float32)
@@ -12,6 +14,7 @@ def test_matmul():
     t3 = t1 @ t2
     n3 = cp.asnumpy(t3)
     allclose(n1 @ n2, n3)
+
 
 def test_matmul_multi_shape():
     np.random.seed(1)

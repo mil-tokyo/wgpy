@@ -3,10 +3,9 @@
 # https://tutorials.chainer.org/ja/14_Basics_of_Chainer.html
 
 import micropip
-await micropip.install('/lib/chainer-5.4.0-py3-none-any.whl')
+
+await micropip.install("/lib/chainer-5.4.0-py3-none-any.whl")
 from pyodide.http import pyfetch
-response = await pyfetch('/lib/mnist.zip') # mnist.zip contains train.npz, test.npz
-await response.unpack_archive(extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/mnist", format="zip")
 
 from js import pythonIO
 import numpy as np
@@ -17,6 +16,13 @@ from chainer import Chain
 import chainer.functions as F
 import chainer.links as L
 from chainer.training import extensions
+
+
+response = await pyfetch("/lib/mnist.zip")  # mnist.zip contains train.npz, test.npz
+await response.unpack_archive(
+    extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/mnist", format="zip"
+)
+
 chainer.print_runtime_info()
 
 from chainer.datasets import mnist
@@ -29,10 +35,11 @@ np.random.seed(1)
 
 from chainer.datasets import split_dataset_random
 
-gpu_id = -1 # cpu
+gpu_id = -1  # cpu
 try:
     import cupy as cp
-    gpu_id = 0 # gpu
+
+    gpu_id = 0  # gpu
 except:
     pass
 
@@ -41,6 +48,7 @@ train_iter = iterators.SerialIterator(train, batchsize)
 # reduce test size to 1000
 test, _ = split_dataset_random(test, 1000, seed=0)
 test_iter = iterators.SerialIterator(test, batchsize, False, False)
+
 
 class MLP(Chain):
     def __init__(self, n_mid_units=100, n_out=10):
@@ -55,6 +63,7 @@ class MLP(Chain):
         h2 = F.relu(self.l2(h1))
         return self.l3(h2)
 
+
 class CNN(Chain):
     def __init__(self, ch=64, n_out=10):
         super().__init__()
@@ -66,7 +75,7 @@ class CNN(Chain):
             self.conv3 = L.Convolution2D(ch, ch, ksize=3, stride=1, pad=1)
             self.bn3 = L.BatchNormalization(ch)
             self.linear = L.Linear(None, n_out)
-    
+
     def forward(self, x):
         h = x
         h = F.relu(self.bn1(self.conv1(h)))
@@ -74,7 +83,7 @@ class CNN(Chain):
         h = F.relu(self.bn2(self.conv2(h)))
         h = F.max_pooling_2d(h, ksize=2)
         h = F.relu(self.bn3(self.conv3(h)))
-        #h = F.max_pooling_2d(h, ksize=2)
+        # h = F.max_pooling_2d(h, ksize=2)
         h = F.average_pooling_2d(h, 7, stride=1)
         h = self.linear(h)
         return h
@@ -101,7 +110,7 @@ optimizer.setup(model)
 updater = training.updaters.StandardUpdater(train_iter, optimizer, device=gpu_id)
 
 # Setup a Trainer
-trainer = training.Trainer(updater, (max_epoch, 'epoch'), out='mnist_result')
+trainer = training.Trainer(updater, (max_epoch, "epoch"), out="mnist_result")
 
 from chainer.training import extensions
 
@@ -110,19 +119,33 @@ trainer.extend(extensions.LogReport(trigger=chainer.training.triggers.TimeTrigge
 # trainer.extend(extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
 # trainer.extend(extensions.snapshot_object(model.predictor, filename='model_epoch-{.updater.epoch}'))
 trainer.extend(extensions.Evaluator(test_iter, model, device=gpu_id))
-trainer.extend(extensions.PrintReport(['epoch', 'iteration', 'main/loss', 'main/accuracy', 'validation/main/loss', 'validation/main/accuracy', 'elapsed_time']))
+trainer.extend(
+    extensions.PrintReport(
+        [
+            "epoch",
+            "iteration",
+            "main/loss",
+            "main/accuracy",
+            "validation/main/loss",
+            "validation/main/accuracy",
+            "elapsed_time",
+        ]
+    )
+)
 # matplotlib does not work on worker
-#trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], x_key='epoch', file_name='loss.png'))
-#trainer.extend(extensions.PlotReport(['main/accuracy', 'validation/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
+# trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss'], x_key='epoch', file_name='loss.png'))
+# trainer.extend(extensions.PlotReport(['main/accuracy', 'validation/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
 
 trainer.run()
 try:
     import wgpy_backends.webgl
+
     print(wgpy_backends.webgl.get_performance_metrics())
 except:
     pass
 try:
     import wgpy_backends.webgpu
+
     print(wgpy_backends.webgpu.get_performance_metrics())
 except:
     pass

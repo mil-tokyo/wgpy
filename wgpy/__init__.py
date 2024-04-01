@@ -21,14 +21,18 @@ def isscalar(x):
         # Even if np.array(3.0).shape==(), but it is treated as False
         return np.isscalar(x)
 
+
 # decorator
 def memoize(for_each_device=False):
     def func(f):
         def wrapper(*args, **kwargs):
             # TODO: memoize based on args, kwargs
             return f(*args, **kwargs)
+
         return wrapper
+
     return func
+
 
 # https://docs.cupy.dev/en/stable/reference/generated/cupy.fuse.html#cupy.fuse
 # decorator
@@ -37,8 +41,11 @@ def fuse():
     def func(f):
         def wrapper(*args, **kwargs):
             return f(*args, **kwargs)
+
         return wrapper
+
     return func
+
 
 def get_backend_name() -> str:
     """

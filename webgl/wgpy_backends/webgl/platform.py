@@ -1,6 +1,7 @@
 # platform call interface
 import numpy as np
-from js import gl # Pyodide-dependent
+from js import gl  # Pyodide-dependent
+
 
 class WebGLPlatform:
     def __init__(self) -> None:
@@ -14,11 +15,11 @@ class WebGLPlatform:
 
     def disposeBuffer(self, buffer_id: int):
         return gl.disposeBuffer(buffer_id)
-    
+
     def setCommBuf(self, buffer: np.ndarray):
         self._latest_comm_buf = buffer
         return gl.setCommBuf(buffer)
-    
+
     def setData(self, buffer_id: int, js_ctor_type: str, size: int):
         if not gl.setData(buffer_id, js_ctor_type, size):
             # WASM buffer may reallocated
@@ -39,7 +40,10 @@ class WebGLPlatform:
     def runKernel(self, descriptor):
         return gl.runKernel(descriptor)
 
+
 _instance = None
+
+
 def get_platform() -> WebGLPlatform:
     global _instance
     if _instance is None:
