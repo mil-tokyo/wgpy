@@ -11,7 +11,12 @@ async function run() {
   const worker = new Worker('worker.js');
 
   log('Initializing wgpy main-thread-side javascript interface');
-  await wgpy.initMain(worker, { backendOrder: [backend] });
+  try {
+    await wgpy.initMain(worker, { backendOrder: [backend] });
+  } catch (error) {
+    log(`Failed to initialize wgpy: ${error.message}`);
+    return;
+  }
 
   worker.addEventListener('message', (e) => {
     if (e.data.namespace !== 'app') {

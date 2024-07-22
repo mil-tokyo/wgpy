@@ -16,6 +16,9 @@ export async function initMain(worker: Worker, options: WgpyInitOptions): Promis
   let contextGL: ComputeContextGL | null = null;
   let contextGPU: ComputeContextGPU | null = null;
   let initializedBackend: WgpyBackend | null = null;
+  if (typeof SharedArrayBuffer === 'undefined') {
+    throw new Error('wgpy: SharedArrayBuffer is not supported');
+  }
   for (const backend of options.backendOrder ?? ['webgpu', 'webgl']) {
     if (backend === 'webgl') {
       contextGL = new ComputeContextGL();
