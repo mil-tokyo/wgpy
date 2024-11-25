@@ -1,7 +1,22 @@
 import numpy as np
 from wgpy.construct import asarray, asnumpy
 
+_kernels = {}
 
+
+def _register_kernel(name: str):
+    def decorator(func):
+        _kernels[name] = func
+
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+@_register_kernel("crossent_fwd")
 def crossent_fwd(
     reduction_kernel, args, out=None, axis=None, keepdims=False, stream=None
 ):
@@ -21,8 +36,8 @@ def crossent_fwd(
 def mock_reduction_kernel(
     reduction_kernel, args, out=None, axis=None, keepdims=False, stream=None
 ):
-    if reduction_kernel.name == "crossent_fwd":
-        return crossent_fwd(
+    if reduction_kernel.name in _kernels:
+        return _kernels[reduction_kernel.name](
             reduction_kernel, args, out=out, axis=axis, keepdims=keepdims, stream=stream
         )
     else:
