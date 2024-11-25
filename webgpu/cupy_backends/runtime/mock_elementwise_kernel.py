@@ -1,8 +1,24 @@
+from functools import cache
 import numpy as np
 from wgpy.construct import asarray, asnumpy
 from wgpy_backends.webgpu.elementwise_kernel import ElementwiseKernel
 
+_kernels = {}
 
+
+def _register_kernel(name: str):
+    def decorator(func):
+        _kernels[name] = func
+
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+@_register_kernel("softmax_crossent_bwd")
 def softmax_crossent_bwd(elementwise_kernel, args):
     y, t, coeff, n_channel, n_unit, ignore_label = args
     y_data = asnumpy(y)
@@ -16,6 +32,7 @@ def softmax_crossent_bwd(elementwise_kernel, args):
     return asarray(gx)
 
 
+@_register_kernel("momentum_sgd")
 def momentum_sgd(elementwise_kernel, args):
     grad, lr, momentum, param, v = args
     v[:] = momentum * v - lr * grad
@@ -23,37 +40,30 @@ def momentum_sgd(elementwise_kernel, args):
     return param, v
 
 
-relu_bwd_kernel = None
+@cache
+def relu_bwd_kernel():
+    return ElementwiseKernel(
+        in_params="f32 y, f32 gy",
+        out_params="f32 gx",
+        operation="if (y > 0.0) { gx = gy; } else { gx = 0.0; }",
+        name="relu_bwd",
+    )
 
 
+@_register_kernel("relu_bwd")
 def relu_bwd(elementwise_kernel, args):
-    global relu_bwd_kernel
-    if relu_bwd_kernel is None:
-        relu_bwd_kernel = ElementwiseKernel(
-            in_params="f32 y, f32 gy",
-            out_params="f32 gx",
-            operation="if (y > 0.0) { gx = gy; } else { gx = 0.0; }",
-            name="relu_bwd",
-        )
     y, gy = args
-    gx = relu_bwd_kernel(y, gy)
+    gx = relu_bwd_kernel()(y, gy)
     return gx
 
 
-max_pool_fwd_kernel_indexes = None
-max_pool_fwd_kernel_maxval = None
-
-
-def max_pool_fwd(elementwise_kernel, args):
-    global max_pool_fwd_kernel_maxval, max_pool_fwd_kernel_indexes
-    x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, y, indexes = args
-    loop_max = (kh, kw)
-    if max_pool_fwd_kernel_indexes is None:
-        max_pool_fwd_kernel_indexes = ElementwiseKernel(
-            in_params="raw T inx",
-            out_params="i32 indexes",
-            uniforms="i32 h, i32 w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw",
-            operation=f"""
+@cache
+def max_pool_fwd_kernel_indexes():
+    return ElementwiseKernel(
+        in_params="raw T inx",
+        out_params="i32 indexes",
+        uniforms="i32 h, i32 w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let kw: i32 = cmeta.kw;
@@ -96,14 +106,17 @@ let argmax_ky: i32 = argmax_y + ph - out_y * sy;
 let argmax_kx: i32 = argmax_x + pw - out_x * sx;
 indexes = argmax_kx + kw * argmax_ky;
 """,
-            name=f"max_pool_fwd_indexes",
-        )
-    if max_pool_fwd_kernel_maxval is None:
-        max_pool_fwd_kernel_maxval = ElementwiseKernel(
-            in_params="raw T inx, S indexes",
-            out_params="T maxval",
-            uniforms="i32 h, i32 w, i32 sy, i32 sx, i32 ph, i32 pw, i32 kw",
-            operation=f"""
+        name=f"max_pool_fwd_indexes",
+    )
+
+
+@cache
+def max_pool_fwd_kernel_maxval():
+    return ElementwiseKernel(
+        in_params="raw T inx, S indexes",
+        out_params="T maxval",
+        uniforms="i32 h, i32 w, i32 sy, i32 sx, i32 ph, i32 pw, i32 kw",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let sy: i32 = cmeta.sy;
@@ -123,9 +136,14 @@ let argmax_x: i32 = argmax_kx + out_x * sx - pw;
 
 maxval = inx(((_maxval_0 * c + _maxval_1) * h + argmax_y) * w + argmax_x);
 """,
-            name="max_pool_fwd_maxval",
-        )
-    max_pool_fwd_kernel_indexes(
+        name="max_pool_fwd_maxval",
+    )
+
+
+@_register_kernel("max_pool_fwd")
+def max_pool_fwd(elementwise_kernel, args):
+    x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, y, indexes = args
+    max_pool_fwd_kernel_indexes()(
         x,
         indexes,
         uniforms={
@@ -139,7 +157,7 @@ maxval = inx(((_maxval_0 * c + _maxval_1) * h + argmax_y) * w + argmax_x);
             "pw": pw,
         },
     )
-    max_pool_fwd_kernel_maxval(
+    max_pool_fwd_kernel_maxval()(
         x,
         indexes,
         y,
@@ -157,18 +175,13 @@ maxval = inx(((_maxval_0 * c + _maxval_1) * h + argmax_y) * w + argmax_x);
     return y, indexes
 
 
-max_pool_bwd_kernel = None
-
-
-def max_pool_bwd(elementwise_kernel, args):
-    global max_pool_bwd_kernel
-    gy, indexes, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, gx = args
-    if max_pool_bwd_kernel is None:
-        max_pool_bwd_kernel = ElementwiseKernel(
-            in_params="raw T gy, raw i32 indexes",
-            out_params="T gx",
-            uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw",
-            operation=f"""
+@cache
+def max_pool_bwd_kernel():
+    return ElementwiseKernel(
+        in_params="raw T gy, raw i32 indexes",
+        out_params="T gx",
+        uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
@@ -207,8 +220,13 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
     }}
 }}
 """,
-            name=f"max_pool_bwd",
-        )
+        name=f"max_pool_bwd",
+    )
+
+
+@_register_kernel("max_pool_bwd")
+def max_pool_bwd(elementwise_kernel, args):
+    gy, indexes, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, gx = args
     uniforms = {
         "h": h,
         "w": w,
@@ -221,22 +239,17 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
         "ph": ph,
         "pw": pw,
     }
-    max_pool_bwd_kernel(gy, indexes, gx, uniforms=uniforms)
+    max_pool_bwd_kernel()(gy, indexes, gx, uniforms=uniforms)
     return gx
 
 
-avg_pool_fwd_kernel = None
-
-
-def avg_pool_fwd(elementwise_kernel, args):
-    global avg_pool_fwd_kernel
-    x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, out = args
-    if avg_pool_fwd_kernel is None:
-        avg_pool_fwd_kernel = ElementwiseKernel(
-            in_params="raw T inx",
-            out_params="T oimg",
-            uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff",
-            operation=f"""
+@cache
+def avg_pool_fwd_kernel():
+    return ElementwiseKernel(
+        in_params="raw T inx",
+        out_params="T oimg",
+        uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
@@ -274,8 +287,13 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
 
 oimg = val * coeff;
 """,
-            name=f"avg_pool_fwd",
-        )
+        name=f"avg_pool_fwd",
+    )
+
+
+@_register_kernel("avg_pool_fwd")
+def avg_pool_fwd(elementwise_kernel, args):
+    x, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, out = args
     uniforms = {
         "h": h,
         "w": w,
@@ -289,22 +307,17 @@ oimg = val * coeff;
         "pw": pw,
         "coeff": coeff,
     }
-    avg_pool_fwd_kernel(x, out, uniforms=uniforms)
+    avg_pool_fwd_kernel()(x, out, uniforms=uniforms)
     return out
 
 
-avg_pool_bwd_kernel = None
-
-
-def avg_pool_bwd(elementwise_kernel, args):
-    global avg_pool_bwd_kernel
-    gy, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, gx = args
-    if avg_pool_bwd_kernel is None:
-        avg_pool_bwd_kernel = ElementwiseKernel(
-            in_params="raw T gy",
-            out_params="T gx",
-            uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff",
-            operation=f"""
+@cache
+def avg_pool_bwd_kernel():
+    return ElementwiseKernel(
+        in_params="raw T gy",
+        out_params="T gx",
+        uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, f32 coeff",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
@@ -342,8 +355,13 @@ for (var yi: i32 = 0; yi < kh; yi++) {{
 
 gx = val * coeff;
 """,
-            name=f"avg_pool_bwd",
-        )
+        name=f"avg_pool_bwd",
+    )
+
+
+@_register_kernel("avg_pool_bwd")
+def avg_pool_bwd(elementwise_kernel, args):
+    gy, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, coeff, gx = args
     uniforms = {
         "h": h,
         "w": w,
@@ -357,24 +375,17 @@ gx = val * coeff;
         "pw": pw,
         "coeff": coeff,
     }
-    avg_pool_bwd_kernel(gy, gx, uniforms=uniforms)
+    avg_pool_bwd_kernel()(gy, gx, uniforms=uniforms)
     return gx
 
 
-im2col_kernel = None
-
-
-def im2col(elementwise_kernel, args):
-    global im2col_kernel
-    img, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, dy, dx, col = args
-    assert col.ndim == 6  # batch, channel, kh, kw, out_h, out_w
-
-    if im2col_kernel is None:
-        im2col_kernel = ElementwiseKernel(
-            in_params="raw T img",
-            out_params="T col",
-            uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx",
-            operation=f"""
+@cache
+def im2col_kernel():
+    return ElementwiseKernel(
+        in_params="raw T img",
+        out_params="T col",
+        uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
@@ -398,8 +409,15 @@ if (in_y >= 0 && in_y < h && in_x >= 0 && in_x < w) {{
     col = T(0);
 }}
 """,
-            name="im2col",
-        )
+        name="im2col",
+    )
+
+
+@_register_kernel("im2col")
+def im2col(elementwise_kernel, args):
+    img, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, dy, dx, col = args
+    assert col.ndim == 6  # batch, channel, kh, kw, out_h, out_w
+
     uniforms = {
         "h": h,
         "w": w,
@@ -414,25 +432,17 @@ if (in_y >= 0 && in_y < h && in_x >= 0 && in_x < w) {{
         "dy": dy,
         "dx": dx,
     }
-    im2col_kernel(img, col, uniforms=uniforms)
+    im2col_kernel()(img, col, uniforms=uniforms)
     return col
 
 
-col2im_kernel = None
-
-
-def col2im(elementwise_kernel, args):
-    global col2im_kernel
-    col, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, dy, dx, img = args
-    # col is col.reduced_view()
-    assert img.ndim == 4
-
-    if col2im_kernel is None:
-        col2im_kernel = ElementwiseKernel(
-            in_params="raw T col",
-            out_params="T img",
-            uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx",
-            operation=f"""
+@cache
+def col2im_kernel():
+    return ElementwiseKernel(
+        in_params="raw T col",
+        out_params="T img",
+        uniforms="i32 h, i32 w, i32 out_h, i32 out_w, i32 kh, i32 kw, i32 sy, i32 sx, i32 ph, i32 pw, i32 dy, i32 dx",
+        operation=f"""
 let h: i32 = cmeta.h;
 let w: i32 = cmeta.w;
 let out_h: i32 = cmeta.out_h;
@@ -464,8 +474,16 @@ for (var ky: i32 = 0; ky < kh; ky++) {{
     }}
 }}
 """,
-            name="col2im",
-        )
+        name="col2im",
+    )
+
+
+@_register_kernel("col2im")
+def col2im(elementwise_kernel, args):
+    col, h, w, out_h, out_w, kh, kw, sy, sx, ph, pw, dy, dx, img = args
+    # col is col.reduced_view()
+    assert img.ndim == 4
+
     uniforms = {
         "h": h,
         "w": w,
@@ -480,151 +498,119 @@ for (var ky: i32 = 0; ky < kh; ky++) {{
         "dy": dy,
         "dx": dx,
     }
-    col2im_kernel(col, img, uniforms=uniforms)
+    col2im_kernel()(col, img, uniforms=uniforms)
     return img
 
 
-bn_fwd_kernel = None
+@cache
+def bn_fwd_kernel():
+    return ElementwiseKernel(
+        in_params="T x, T mean, T inv_std, T gamma, T beta",
+        out_params="T y",
+        operation="y = gamma * (x - mean) * inv_std + beta",
+        name="bn_fwd",
+    )
 
 
+@_register_kernel("bn_fwd")
 def bn_fwd(elementwise_kernel, args):
-    global bn_fwd_kernel
-    if bn_fwd_kernel is None:
-        bn_fwd_kernel = ElementwiseKernel(
-            in_params="T x, T mean, T inv_std, T gamma, T beta",
-            out_params="T y",
-            operation="y = gamma * (x - mean) * inv_std + beta",
-            name="bn_fwd",
-        )
-    y = bn_fwd_kernel(*args)
+    y = bn_fwd_kernel()(*args)
     return y
 
 
-# bn_bwd_kernel = None
-# def bn_bwd(elementwise_kernel, args):
-#     global bn_bwd_kernel
-#     if bn_bwd_kernel is None:
-#         bn_bwd_kernel = ElementwiseKernel(
-#             in_params='T gy, T x_hat, T gamma, T inv_std, T ggamma, T gbeta, T inv_m',
-#             out_params='T gx',
-#             operation='gx = (gamma * inv_std) * (gy - (x_hat * ggamma + gbeta) * inv_m)',
-#             name='bn_bwd'
-#         )
-#     y = bn_bwd_kernel(*args)
-#     return y
-bn_bwd_kernel = None
+@cache
+def bn_bwd_kernel_0():
+    return ElementwiseKernel(
+        in_params="T gy, T x_hat, T ggamma, T gbeta, T inv_m",
+        out_params="T gx",
+        operation="gx = gy - (x_hat * ggamma + gbeta) * inv_m",
+        name="bn_bwd_0",
+    )
 
 
+@cache
+def bn_bwd_kernel_1():
+    return ElementwiseKernel(
+        in_params="T gx_tmp, T gamma, T inv_std",
+        out_params="T gx",
+        operation="gx = gx_tmp * (gamma * inv_std)",
+        name="bn_bwd_2",
+    )
+
+
+@_register_kernel("bn_bwd")
 def bn_bwd(elementwise_kernel, args):
-    global bn_bwd_kernel
     gy, x_hat, gamma, inv_std, ggamma, gbeta, inv_m = args
-    if bn_bwd_kernel is None:
-        # kernel is divieded into 2 kernels because of the following error:
-        # The number of storage buffers (9) in the Compute stage exceeds the maximum per-stage limit (8).
-        bn_bwd_kernel = ElementwiseKernel(
-            in_params="T gy, T x_hat, T ggamma, T gbeta, T inv_m",
-            out_params="T gx",
-            operation="gx = gy - (x_hat * ggamma + gbeta) * inv_m",
-            name="bn_bwd_1",
-        ), ElementwiseKernel(
-            in_params="T gx_tmp, T gamma, T inv_std",
-            out_params="T gx",
-            operation="gx = gx_tmp * (gamma * inv_std)",
-            name="bn_bwd_2",
-        )
-    x_tmp = bn_bwd_kernel[0](gy, x_hat, ggamma, gbeta, inv_m)
-    y = bn_bwd_kernel[1](x_tmp, gamma, inv_std)
+    # kernel is divieded into 2 kernels because of the following error:
+    # The number of storage buffers (9) in the Compute stage exceeds the maximum per-stage limit (8).
+    x_tmp = bn_bwd_kernel_0()(gy, x_hat, ggamma, gbeta, inv_m)
+    y = bn_bwd_kernel_1()(x_tmp, gamma, inv_std)
     return y
 
 
-sigmoid_fwd_kernel = None
+@cache
+def sigmoid_fwd_kernel():
+    return ElementwiseKernel(
+        in_params="T x",
+        out_params="T y",
+        operation="y = 1.0 / (1.0 + exp(-x))",
+        name="sigmoid_fwd",
+    )
 
 
+@_register_kernel("sigmoid_fwd")
 def sigmoid_fwd(elementwise_kernel, args):
-    global sigmoid_fwd_kernel
-    if sigmoid_fwd_kernel is None:
-        sigmoid_fwd_kernel = ElementwiseKernel(
-            in_params="T x",
-            out_params="T y",
-            operation="y = 1.0 / (1.0 + exp(-x))",
-            name="sigmoid_fwd",
-        )
-    y = sigmoid_fwd_kernel(*args)
+    y = sigmoid_fwd_kernel()(*args)
     return y
 
 
-sigmoid_bwd_kernel = None
+@cache
+def sigmoid_bwd_kernel():
+    return ElementwiseKernel(
+        in_params="T y, T gy",
+        out_params="T gx",
+        operation="gx = gy * y * (1.0 - y)",
+        name="sigmoid_bwd",
+    )
 
 
+@_register_kernel("sigmoid_bwd")
 def sigmoid_bwd(elementwise_kernel, args):
-    global sigmoid_bwd_kernel
-    if sigmoid_bwd_kernel is None:
-        sigmoid_bwd_kernel = ElementwiseKernel(
-            in_params="T y, T gy",
-            out_params="T gx",
-            operation="gx = gy * y * (1.0 - y)",
-            name="sigmoid_bwd",
-        )
-    gx = sigmoid_bwd_kernel(*args)
+    gx = sigmoid_bwd_kernel()(*args)
     return gx
 
 
-div_bwd_kernel_gx0 = None
-div_bwd_kernel_gx1 = None
+@cache
+def div_bwd_kernel_gx0():
+    return ElementwiseKernel(
+        in_params="T x1, T gy",
+        out_params="T gx0",
+        operation="gx0 = gy / x1",
+        name="div_bwd_gx0",
+    )
 
 
+@cache
+def div_bwd_kernel_gx1():
+    return ElementwiseKernel(
+        in_params="T gx0, T x0, T x1",
+        out_params="T gx1",
+        operation="gx1 = -gx0 * x0 / x1",
+        name="div_bwd_gx1",
+    )
+
+
+@_register_kernel("div_bwd")
 def div_bwd(elementwise_kernel, args):
     x0, x1, gy = args
-    global div_bwd_kernel_gx0
-    if div_bwd_kernel_gx0 is None:
-        div_bwd_kernel_gx0 = ElementwiseKernel(
-            in_params="T x1, T gy",
-            out_params="T gx0",
-            operation="gx0 = gy / x1",
-            name="div_bwd_gx0",
-        )
-    global div_bwd_kernel_gx1
-    if div_bwd_kernel_gx1 is None:
-        div_bwd_kernel_gx1 = ElementwiseKernel(
-            in_params="T gx0, T x0, T x1",
-            out_params="T gx1",
-            operation="gx1 = -gx0 * x0 / x1",
-            name="div_bwd_gx1",
-        )
-    gx0 = div_bwd_kernel_gx0(x1, gy)
-    gx1 = div_bwd_kernel_gx1(gx0, x0, x1)
+    gx0 = div_bwd_kernel_gx0()(x1, gy)
+    gx1 = div_bwd_kernel_gx1()(gx0, x0, x1)
     return gx0, gx1
 
 
 def mock_elementwise_kernel(elementwise_kernel, args, size=None, block_size=None):
-    if elementwise_kernel.name == "softmax_crossent_bwd":
-        return softmax_crossent_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "momentum_sgd":
-        return momentum_sgd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "relu_bwd":
-        return relu_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "max_pool_fwd":
-        return max_pool_fwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "max_pool_bwd":
-        return max_pool_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "avg_pool_fwd":
-        return avg_pool_fwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "avg_pool_bwd":
-        return avg_pool_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "im2col":
-        return im2col(elementwise_kernel, args)
-    elif elementwise_kernel.name == "col2im":
-        return col2im(elementwise_kernel, args)
-    elif elementwise_kernel.name == "bn_fwd":
-        return bn_fwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "bn_bwd":
-        return bn_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "sigmoid_fwd":
-        return sigmoid_fwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "sigmoid_bwd":
-        return sigmoid_bwd(elementwise_kernel, args)
-    elif elementwise_kernel.name == "div_bwd":
-        return div_bwd(elementwise_kernel, args)
+    if elementwise_kernel.name in _kernels:
+        return _kernels[elementwise_kernel.name](elementwise_kernel, args)
     else:
         msg = f"""Requested elementwise kernel is not implemented in WebGPU.
 {repr({'in_params': elementwise_kernel.in_params, 'out_params': elementwise_kernel.out_params, 'operation': elementwise_kernel.operation, 'name': elementwise_kernel.name, 'reduce_dims': elementwise_kernel.reduce_dims, 'preamble': elementwise_kernel.preamble, 'no_return': elementwise_kernel.no_return, 'return_tuple': elementwise_kernel.return_tuple, 'loop_prep': elementwise_kernel.loop_prep, 'after_loop': elementwise_kernel.after_loop})}
