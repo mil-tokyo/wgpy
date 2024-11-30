@@ -6,6 +6,7 @@ import time
 
 use_gpu = pythonIO.config.use_gpu
 kernel_type = pythonIO.config.kernel_type
+np.random.seed(0)
 
 
 def BlackScholes(S, X, T, R, V):
@@ -183,12 +184,14 @@ def bench_one(samples: int):
 
     # run
     n_runs = 10
-    time_start = time.time()
+    times = []
     for _ in range(n_runs):
+        time_start = time.time()
         run_once(price, strike, t, use_gpu, kernel_type)
-    time_end = time.time()
+        time_end = time.time()
+        times.append(time_end - time_start)
 
-    time_avg = (time_end - time_start) / n_runs
+    time_avg = np.mean(times)
     if time_avg > 0:
         samples_per_sec = samples / time_avg
     else:
@@ -196,6 +199,7 @@ def bench_one(samples: int):
     print(
         f"samples={samples}, average time of {n_runs} runs, {time_avg} sec, {samples_per_sec} samples/sec"
     )
+    print("std", np.std(times), "min", np.min(times), "max", np.max(times))
 
 
 def verify(samples: int):
