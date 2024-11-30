@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPU computing with Python on web browser sample</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+      #resultImage img {
+        width: 256px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mandelbrot benchmark on web browser</h1>
+    <div>
+      Backend:
+      <label><input type="radio" name="backend" value="webgpu" checked />WebGPU</label>
+      <label><input type="radio" name="backend" value="webgl" />WebGL</label>
+      <label><input type="radio" name="backend" value="cpu" />CPU</label>
+    </div>
+    <div>
+      Kernel type:
+      <input type="radio" name="kerneltype" id="kernelNormal" value="normal" checked /><label for="kernelNormal">normal (combination of basic array functions)</label>
+      <input type="radio" name="kerneltype" id="kernelCustom" value="custom" /><label for="kernelCustom">custom (hand-written kernel to do all computation in once)</label>
+      <input type="radio" name="kerneltype" id="kernelNOP" value="nop" /><label for="kernelNOP">No-op (output constant. intended for measuring only CPU-GPU transfer.)</label>
+    </div>
+    <div>
+      Grid size:
+      <input type="radio" name="grid" id="grid256" value="256" /><label for="grid256">256</label>
+      <input type="radio" name="grid" id="grid1024" value="1024" checked /><label for="grid1024">1024</label>
+      <input type="radio" name="grid" id="grid4096" value="4096" /><label for="grid4096">4096</label>
+    </div>
+    <div>
+      Mode:
+      <input type="radio" name="mode" id="modeBenchmark" value="benchmark" checked /><label for="modeBenchmark">benchmark</label>
+      <input type="radio" name="mode" id="modeVerify" value="verify" /><label for="modeVerify">verify result between CPU and GPU</label>
+      <input type="radio" name="mode" id="modeVisualize" value="visualize" /><label for="modeVisualize">display generated image</label>
+    </div>
+    <button type="button" id="run">Run</button>
+    <p>For GPU computing, time to transferring matrix content between CPU and GPU are inclueded.</p>
+    <div id="resultImage"></div>
+    <div id="log"></div>
+  </body>
+</html>
