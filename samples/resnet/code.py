@@ -61,7 +61,7 @@ max_epoch = 10
 model = L.Classifier(model)
 
 # selection of your optimizing method
-optimizer = optimizers.MomentumSGD()
+optimizer = optimizers.MomentumSGD(lr=0.01*(batchsize/16))
 
 # Give the optimizer a reference to the model
 optimizer.setup(model)
