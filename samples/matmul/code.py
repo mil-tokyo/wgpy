@@ -21,15 +21,24 @@ def run_once(mat_a, mat_b, times, use_gpu):
         if mat_c is None:
             mat_c = mat_a @ mat_b
         else:
-            mat_c += mat_a @ mat_b
+            mat_c = mat_c @ mat_b
     if use_gpu:
         mat_c = cp.asnumpy(mat_c)
     return mat_c
 
 
+def make_mat(a, b):
+    # generate permutation matrix of a*b, which allows to multiply matrix multiple times without overflow
+    mat = np.zeros((a, b), dtype=np.float32)
+    idxs = np.random.permutation(a) % b
+    mat[np.arange(a), idxs] = 1
+    return mat
+
+
 def bench_one(m, n, k):
-    mat_a = np.random.rand(m, k).astype(np.float32)
-    mat_b = np.random.rand(k, n).astype(np.float32)
+    np.random.seed(0)
+    mat_a = make_mat(m, k)
+    mat_b = make_mat(k, n)
     times = pythonIO.config.times
 
     print(f"m={m}, n={n}, k={k}, started")

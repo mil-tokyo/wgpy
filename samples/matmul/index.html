@@ -37,7 +37,7 @@ for _ in range(times):
     if mat_c is None:
         mat_c = mat_a @ mat_b
     else:
-        mat_c += mat_c @ mat_b
+        mat_c = mat_c @ mat_b
 if use_gpu:
     mat_c = cp.asnumpy(mat_c)
 # Timer stops here
