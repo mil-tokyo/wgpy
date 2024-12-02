@@ -8,7 +8,9 @@ await micropip.install("/lib/chainer-5.4.0-py3-none-any.whl")
 await micropip.install("/samples/resnet/dist/resnet-0.0.1-py3-none-any.whl")
 from pyodide.http import pyfetch
 
-response = await pyfetch("/lib/cifar100.zip")  # mnist.zip contains train.npz, test.npz
+response = await pyfetch(
+    "/lib/cifar100-subset-5k.zip"
+)  # mnist.zip contains train.npz, test.npz
 await response.unpack_archive(
     extract_dir="/home/pyodide/.chainer/dataset/pfnet/chainer/cifar", format="zip"
 )
@@ -32,8 +34,6 @@ batchsize = int(pythonIO.config.batchSize)
 
 np.random.seed(1)
 
-from chainer.datasets import split_dataset_random
-
 gpu_id = -1  # cpu
 try:
     import cupy as cp
@@ -42,10 +42,10 @@ try:
 except:
     pass
 
-train_iter = iterators.SerialIterator(train, batchsize)
+from chainer.datasets import split_dataset_random
 
-# reduce test size to 1000
-test, _ = split_dataset_random(test, 1000, seed=0)
+# train, _ = split_dataset_random(train, 200, seed=0)
+train_iter = iterators.SerialIterator(train, batchsize)
 test_iter = iterators.SerialIterator(test, batchsize, False, False)
 
 
@@ -54,14 +54,14 @@ model = ResNet18()
 if gpu_id >= 0:
     model.to_gpu(gpu_id)
 
-max_epoch = 10
+max_epoch = 1
 
 # Wrap your model by Classifier and include the process of loss calculation within your model.
 # Since we do not specify a loss function here, the default 'softmax_cross_entropy' is used.
 model = L.Classifier(model)
 
 # selection of your optimizing method
-optimizer = optimizers.MomentumSGD(lr=0.01*(batchsize/16))
+optimizer = optimizers.MomentumSGD(lr=0.01 * (batchsize / 16))
 
 # Give the optimizer a reference to the model
 optimizer.setup(model)
@@ -78,7 +78,7 @@ from chainer.training import extensions
 trainer.extend(extensions.LogReport(trigger=chainer.training.triggers.TimeTrigger(10)))
 # trainer.extend(extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
 # trainer.extend(extensions.snapshot_object(model.predictor, filename='model_epoch-{.updater.epoch}'))
-trainer.extend(extensions.Evaluator(test_iter, model, device=gpu_id))
+# trainer.extend(extensions.Evaluator(test_iter, model, device=gpu_id))
 trainer.extend(
     extensions.PrintReport(
         [
