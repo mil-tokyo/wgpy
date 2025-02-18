@@ -2,6 +2,76 @@
 
 wgpy is a WebGL accelerated numpy-compatible array library for web browsers. It runs on [Pyodide](https://pyodide.org/), the python runtime which runs on the web browser. Deep learning can also be performed on GPUs in conjunction with [Chainer](https://github.com/chainer/chainer).
 
+# Demo
+
+You can actually run WgPy in your web browser at [the demo site](https://wgpy-demo.web.app/).
+
+<img src="images/mandelbrot.png" width="50%">
+
+# Example
+
+With WgPy, such CuPy-compatible Python code can be executed on the GPU in a web browser.
+
+```python
+def mandelbrot(real, imag, n_iters):
+    xp = cp.get_array_module(real) # get numpy or wgpy depending on the input
+    xs = xp.zeros((real.size, imag.size), dtype=np.float32)
+    ys = xp.zeros((real.size, imag.size), dtype=np.float32)
+    count = xp.zeros((real.size, imag.size), dtype=np.int32)
+    for _ in range(n_iters):
+        xs, ys = xs * xs - ys * ys + real, xs * ys * 2.0 + imag
+        count += ((xs * xs + ys * ys) < 4.0).astype(np.int32)
+    return count
+```
+
+For efficient execution, a custom kernel can also be implemented.
+
+```python
+# WebGPU custom kernel
+ElementwiseKernel(
+    in_params="f32 real, f32 imag",
+    out_params="i32 c",
+    operation="""
+c = 0;
+var x: f32 = 0.0;
+var y: f32 = 0.0;
+for(var k: u32 = 0u; k < 500u; k = k + 1u) {
+    var nx: f32 = x * x - y * y + real;
+    var ny: f32 = x * y * 2.0 + imag;
+    x = nx;
+    y = ny;
+    if (x * x + y * y < 4.0) {
+        c = c + 1;
+    }
+}
+    """,
+    name=f"mandelbrot",
+)
+```
+
+```python
+# WebGL custom kernel
+ElementwiseKernel(
+    in_params="float real, float imag",
+    out_params="int c",
+    operation="""
+c = 0;
+float x = 0.0;
+float y = 0.0;
+for (int k = 0; k < 500; k++) {
+    float nx = x * x - y * y + real;
+    float ny = x * y * 2.0 + imag;
+    x = nx;
+    y = ny;
+    if (x * x + y * y < 4.0) {
+        c = c + 1;
+    }
+}
+    """,
+    name=f"mandelbrot_500",
+)
+```
+
 # Setup Environment
 
 Python 3.11 and Node.js 16 are required.
