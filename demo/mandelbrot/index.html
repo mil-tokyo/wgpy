@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mandelbrot set rendering using WgPy</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+      #resultImage img {
+        width: 512px;
+        height: 512px;
+        background-color: gray;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mandelbrot set rendering using WgPy</h1>
+    <p>This demo executes Python code in a web browser and renders the Mandelbrot set on a GPU.</p>
+    <div>
+      <button type="button" id="run">Start (loads runtime of about 20MB)</button>
+    </div>
+    <div id="resultImage"><img id="mandelbrotImage" draggable="false"></div>
+    
+    <p>Drag to move the image, and use the wheel to zoom in and out. <button id="resetZoom">Reset</button></p>
+    <details>
+      <summary>Config</summary>
+      <div>
+        Backend (WebGPU is fastest, but Safari does not implement it. You need to set it before clicking "Run"):
+        <label><input type="radio" name="backend" value="webgpu" />WebGPU</label>
+        <label><input type="radio" name="backend" value="webgl" />WebGL</label>
+        <label><input type="radio" name="backend" value="cpu" />CPU</label>
+      </div>
+      <p>Log</p>
+      <div id="log"></div>
+    </details>
+  </body>
+</html>

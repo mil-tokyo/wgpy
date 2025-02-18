@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Convolutional Neural Network Training for MNIST Digits Classification</title>
+    <script src="main.js"></script>
+    <script src="../../dist/wgpy-main.js"></script>
+    <style>
+      #log pre {
+        margin: 0.25em 0;
+      }
+
+      .correct {
+        background-color: lightgreen;
+      }
+
+      .wrong {
+        background-color: lightcoral;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Convolutional Neural Network Training for MNIST Digits Classification using WgPy</h1>
+    <p>This demo trains a convolutional neural network to classify MNIST digits dataset. The computation is performed in the web browser using GPU (WebGPU / WebGL), with training-loop implementation by Python.</p>
+    <button type="button" id="run">Run (loads runtime and dataset of about 20MB)</button>
+    <div>
+      <h2>Training metrics</h2>
+      <table>
+        <tr>
+          <th>Iterations</th>
+          <th>Training loss</th>
+          <th>Test loss</th>
+          <th>Test accuracy</th>
+        </tr>
+        <tr>
+          <td id="iterations">-</td>
+          <td id="trainingLoss">-</td>
+          <td id="testLoss">-</td>
+          <td id="testAccuracy">-</td>
+        </tr>
+      </table>
+      <h2>Test results</h2>
+      <table style="text-align: center;">
+        <tr>
+          <td>Input</td>
+          <td><img src="../../lib/mnist-test/mnist-0.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-1.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-2.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-3.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-4.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-5.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-6.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-7.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-8.png"></td>
+          <td><img src="../../lib/mnist-test/mnist-9.png"></td>
+        </tr>
+        <tr>
+          <td>Prediction</td>
+          <td id="prediction0">-</td>
+          <td id="prediction1">-</td>
+          <td id="prediction2">-</td>
+          <td id="prediction3">-</td>
+          <td id="prediction4">-</td>
+          <td id="prediction5">-</td>
+          <td id="prediction6">-</td>
+          <td id="prediction7">-</td>
+          <td id="prediction8">-</td>
+          <td id="prediction9">-</td>
+        </tr>
+      </table>
+    </div>
+    <details>
+      <summary>Details</summary>
+      <div>
+        This demo runs a training loop provided by <a href="https://chainer.org/" target="_blank" rel="noopener noreferrer">Chainer</a> library, which is a deep learning framework in Python.
+        Chainer uses CuPy library to perform computation on GPU on desktop environment, and in this demo it is replaced by WgPy, a library to use GPU inside web browsers. This demo uses <a href="http://yann.lecun.com/exdb/mnist/" target="_blank" rel="noopener noreferrer">MNIST</a> dataset by Yann LeCun. Training samples are reduced to 5000 samples for reducing network bandwidth.
+      </div>
+      <div>
+        Options (must be set before clicking "Run"):
+        <div>
+          Backends to try:
+          <label><input type="checkbox" id="webgpu" value="webgpu" checked />WebGPU</label>
+          <label><input type="checkbox" id="webgl" value="webgl" checked />WebGL</label>
+          <p>
+            If both are checked, WebGPU is first tried. If the browser does not support it, WebGL is tried.
+          </p>
+        </div>
+        <div>
+          Model:
+          <label><input type="radio" name="model" value="MLP" />MLP</label>
+          <label><input type="radio" name="model" value="CNN" checked />CNN</label>
+        </div>
+        <div>
+          Batch size:
+          <input type="number" name="batchSize" value="32"/>
+        </div>
+      </div>
+    </details>
+    <div id="log"></div>
+  </body>
+</html>
