@@ -102,7 +102,7 @@ npm run build
 ```
 
 The output is placed in the `dist` directory.
-The Pyodide is expected to work on WebWorker, not the main thread, because wgpy is mainly forcing for running heavy tasks. 
+The Pyodide is expected to work on WebWorker, not the main thread, because wgpy is mainly forcusing for running heavy tasks. 
 `{wgpy-main.js,wgpy-worker.js}` are the JavaScript library. The `wgpy-main.js` needs to be loaded in the main thread (using `<script>` tag). It calls the WebGL API following the commands from WebWorker. `wgpy-worker.js` has to be loaded in WebWorker thread (using `importScripts`). This script exposes an interface to the wgpy python library and proxy it to the main thread. `wgpy_webgl-<version>-py3-none-any.whl` is the python library that is loaded using `await pyodide.loadPackage('path/to/wgpy_webgl-<version>-py3-none-any.whl');` in the JavaScript code or `micropip.install('path/to/wgpy_webgl-<version>-py3-none-any.whl')` in the Python code. It gives a python API that has the same interface as numpy. The wgpy can be imported as `import wgpy as wp`. A wrapper of wgpy to provide the same API as cupy is also implemented to minimize changes to Chainer (e.g. `import cupy as cp`). `wgpy_test-<version>-py3-none-any.whl` contains test code.
 
 Here is the minimum sample code:
@@ -115,6 +115,18 @@ gpu_in_data = wp.asarray([1.0, 2.0, 2.5])
 gpu_out_data = gpu_in_data * 2.0
 # transfer array to CPU (numpy ndarray)
 out_data = wp.asnumpy(gpu_out_data)
+```
+
+For compatibility with CuPy, you can also use the following code:
+
+```python
+import cupy as cp
+# transfer array to GPU
+gpu_in_data = cp.asarray([1.0, 2.0, 2.5])
+# compute on GPU
+gpu_out_data = gpu_in_data * 2.0
+# transfer array to CPU (numpy ndarray)
+out_data = cp.asnumpy(gpu_out_data)
 ```
 
 # Run Examples
