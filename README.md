@@ -72,6 +72,12 @@ for (int k = 0; k < 500; k++) {
 )
 ```
 
+# System Structure
+
+WgPy runs on the web browser. The following figure shows the system structure.
+
+<img src="images/mandelbrot.png" width="50%">
+
 # Setup Environment
 
 Python 3.11 and Node.js 16 are required.
