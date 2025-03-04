@@ -2,6 +2,8 @@
 
 wgpy is a WebGL accelerated numpy-compatible array library for web browsers. It runs on [Pyodide](https://pyodide.org/), the python runtime which runs on the web browser. Deep learning can also be performed on GPUs in conjunction with [Chainer](https://github.com/chainer/chainer).
 
+For core implementation technique, please refer to [our arXiv paper](https://arxiv.org/abs/2503.00279).
+
 # Demo
 
 You can actually run WgPy in your web browser at [the demo site](https://wgpy-demo.web.app/).
